@@ -45,3 +45,4 @@
 -keepattributes Signature, InnerClasses, EnclosingMethod
 -keep class com.fasterxml.jackson.** { *; }
 -keep class com.auth0.jwt.** { *; }
+-keep class com.jcraft.jsch.** { *; }
