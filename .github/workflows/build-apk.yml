@@ -1,38 +1,38 @@
-在……之上
+name: Build APK
 
-操作/上载工件@v4:
-推:
-分支机构: [掌握]
-workflow_dispatch:
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
 
-工作:
-建立:
-连续的: Ubuntu-最新
-步骤:
-      - uses: 操作/结帐@v4
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - 姓名: 设置JDK17
-uses: 操作/设置-Java@v4
-和……一起:
-分布: temurin
-java版: 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
--姓名：设置Node.js
-uses：操作/设置-节点@v4
-和……一起:
-节点版本: 20
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
--姓名: 安装pnpm
-跑: npm安装-g pnpm
+      - name: Install pnpm
+        run: npm install -g pnpm
 
--姓名: 安装web-ui依赖项
-跑: CD web-ui&&pnpm安装
+      - name: Install web-ui dependencies
+        run: cd web-ui && pnpm install
 
--姓名: 构建调试安装包
-跑: chmod+x gradlew&&./gradlew装配调试
+      - name: Build debug APK
+        run: chmod +x gradlew && ./gradlew assembleDebug
 
--姓名: 上传安装包
-uses: 操作/上载工件@v4
-和……一起:
-姓名: orangechat-debug
-路径: app/build/outputs/apk/debug/*.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: orangechat-debug
+          path: app/build/outputs/apk/debug/*.apk
