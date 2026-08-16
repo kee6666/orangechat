@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -70,6 +70,7 @@ import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getCurrentChatModel
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.findProvider
+import me.rerere.rikkahub.data.service.ProactiveMessageTriggerService
 import me.rerere.rikkahub.plugin.data.PluginDataStore
 import me.rerere.rikkahub.plugin.loader.PluginLoader
 import me.rerere.rikkahub.plugin.loader.LoadedPlugin
@@ -1140,6 +1141,28 @@ private class PluginWebViewClient(
                 onClose()
             }
 
+            "triggerProactiveMessage" -> {
+                val context = params["context"] ?: ""
+                val intent = Intent(webView.context, ProactiveMessageTriggerService::class.java).apply {
+                    putExtra(ProactiveMessageTriggerService.EXTRA_FORCE_TRIGGER, true)
+                    putExtra(ProactiveMessageTriggerService.EXTRA_DEVICE_EVENT_CONTEXT, context)
+                }
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        webView.context.startForegroundService(intent)
+                    } else {
+                        webView.context.startService(intent)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "triggerProactiveMessage failed", e)
+                }
+                webView.post {
+                    webView.evaluateJavascript(
+                        "window.__bridgeResult('${params["callbackId"]}', {success:true});", null
+                    )
+                }
+            }
+
             "callTool" -> {
                 val toolName = params["toolName"] ?: ""
                 val toolParams = params["params"] ?: "{}"
@@ -1539,6 +1562,9 @@ private const val bridgeJavascript = """
         },
         close: function() {
             bridgeCall('close', {});
+        },
+        triggerProactiveMessage: function(context) {
+            return bridgeCall('triggerProactiveMessage', {context: context || ''});
         },
         callAI: function(prompt, context) {
             return bridgeCall('callAI', {prompt: prompt, context: context || '{}'});
