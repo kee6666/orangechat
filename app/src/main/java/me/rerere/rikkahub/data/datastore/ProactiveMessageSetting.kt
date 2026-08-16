@@ -26,4 +26,6 @@ data class ProactiveMessageSetting(
     val aggressiveDebounceSeconds: Int = 30,
     // 悬浮球：主动消息到达时以 Telegram 风格悬浮球提醒，点击直接进入聊天页
     val floatingBubbleEnabled: Boolean = false,
+    // 主动消息自动批准工具：默认开，后台模式下需要审批的工具直接自动执行（敏感工具黑名单除外）
+    val autoApproveTools: Boolean = true,
 )

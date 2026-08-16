@@ -412,6 +412,11 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
     companion object {
         private const val TAG = "ProactiveMessageTrigger"
         private const val MAX_TOOL_STEPS = 5 // 主动消息最大工具调用步数
+        // 主动消息自动批准模式下也禁止执行的敏感工具（后台无人看管，避免危险操作）
+        private val PROACTIVE_BLOCKED_TOOLS = setOf(
+            "eval_javascript", // 任意代码执行
+            "supabase_query",  // 裸 SQL 查询
+        )
         // 外部触发（网关轮询）时跳过内部 minInterval 去重
         const val EXTRA_FORCE_TRIGGER = "force_trigger"
         // 激进模式设备事件上下文（由 DeviceEventAiTriggerService 传入）
@@ -570,8 +575,14 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                     } ?: emptyList()
                 )
 
+                // 防重复+知冷暖：取上一条AI消息文本、判断用户是否已回复
+                val lastAiText = conversation?.currentMessages?.lastOrNull { it.role == MessageRole.ASSISTANT }
+                    ?.parts?.filterIsInstance<UIMessagePart.Text>()?.joinToString("\n") { it.text }?.take(200)
+                val lastMsgRole = conversation?.currentMessages?.lastOrNull()?.role
+                val userReplied = lastMsgRole == MessageRole.USER
+
                 // 构建系统提示词（包含记忆 + 上下文，都放在最后面避免被网关淹没）
-                val systemPrompt = buildSystemPrompt(assistant, settings, idleMinutes, proactiveSetting.jumpIdleThresholdMinutes, isFromDeviceEvent, if (isFromDeviceEvent) deviceEventContext else contextStr)
+                val systemPrompt = buildSystemPrompt(assistant, settings, idleMinutes, proactiveSetting.jumpIdleThresholdMinutes, isFromDeviceEvent, if (isFromDeviceEvent) deviceEventContext else contextStr, lastAiText, userReplied)
 
                 // user message 只放简短指令（上下文已在系统提示词中）
                 val userMessage = UIMessage(
@@ -658,7 +669,8 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                     tools = tools,
                     model = model,
                     assistant = assistant,
-                    settings = settings
+                    settings = settings,
+                    autoApproveTools = proactiveSetting.autoApproveTools
                 )
 
                 // 提取AI消息
@@ -848,7 +860,7 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
      * 构建系统提示词，包含记忆等内容
      * isFromDeviceEvent: 是否由激进模式设备事件触发
      */
-    private suspend fun buildSystemPrompt(assistant: Assistant, settings: Settings, idleMinutes: Int = 0, jumpThreshold: Int = 120, isFromDeviceEvent: Boolean = false, deviceEventContext: String? = null): String {
+    private suspend fun buildSystemPrompt(assistant: Assistant, settings: Settings, idleMinutes: Int = 0, jumpThreshold: Int = 120, isFromDeviceEvent: Boolean = false, deviceEventContext: String? = null, lastAiText: String? = null, userReplied: Boolean = true): String {
         return buildString {
             // 基础系统提示词
             val effectiveSystemPrompt = if (assistant.allowConversationSystemPrompt) {
@@ -888,6 +900,14 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                 appendLine("请根据用户的动向，自然地决定是否主动发一条消息。距离用户上次回复已过去 $idleMinutes 分钟。")
                 appendLine("如果你觉得现在没什么好说的，或者没什么有趣的话题，请只回复 [PASS] 即可。")
                 appendLine("[JUMP] 标记不会展示给用户，仅用于触发屏幕跳转。")
+                // 防重复+知冷暖：设备事件触发同样注入
+                if (!lastAiText.isNullOrBlank()) {
+                    appendLine()
+                    appendLine("你上一条主动发的消息是：$lastAiText")
+                    appendLine("请不要重复同样的话题、句式或内容。")
+                }
+                appendLine()
+                appendLine(if (userReplied) "用户回复了你的上一条消息，可以顺着她回的内容自然聊下去。" else "用户没有回复你的上一条主动消息，换点新鲜的或直接关心她。")
                 // 直接注入设备事件上下文
                 if (!deviceEventContext.isNullOrBlank()) {
                     appendLine()
@@ -903,6 +923,15 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                 appendLine("绝对不要复述上一轮的对话内容，要发新的话题或新的关心。")
                 appendLine("如果你觉得现在没什么好说的，或者没什么有趣的话题，请只回复 [PASS] 即可。")
                 appendLine("[JUMP] 标记不会展示给用户，仅用于触发屏幕跳转。")
+                // 防重复：提醒上一条AI消息，避免车轱辘话
+                if (!lastAiText.isNullOrBlank()) {
+                    appendLine()
+                    appendLine("你上一条主动发的消息是：$lastAiText")
+                    appendLine("请不要重复同样的话题、句式或内容，要说就说不一样的新鲜事。")
+                }
+                // 知冷暖：用户是否回复了上一条主动消息
+                appendLine()
+                appendLine(if (userReplied) "用户回复了你的上一条消息，说明她对那个话题有兴趣，可以顺着她回的内容自然地聊下去。" else "用户没有回复你的上一条主动消息，说明那个话题可能没戳中，这次换点新鲜内容或直接关心她。")
                 // 注入完整上下文（定位、前台app、app使用、通知、电量、健康等）
                 if (!deviceEventContext.isNullOrBlank()) {
                     appendLine()
@@ -1113,7 +1142,8 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
         tools: List<Tool>,
         model: Model,
         assistant: Assistant,
-        settings: Settings
+        settings: Settings,
+        autoApproveTools: Boolean = true
     ): Triple<List<UIMessage>, Boolean, Boolean> {
         var messages = initialMessages.toMutableList()
         var hasToolCalls = false
@@ -1205,13 +1235,15 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                     continue
                 }
 
-                // 检查是否需要审批
-                if (toolDef.needsApproval) {
-                    // 后台模式下，需要审批的工具自动拒绝
-                    Log.w(TAG, "Tool ${toolCall.toolName} needs approval, auto-denying in proactive mode")
+                // 检查是否需要审批：只有 需要审批 且 (未开自动批准 或 在敏感黑名单) 才拒绝
+                val blockedTool = toolDef.needsApproval && toolDef.name in PROACTIVE_BLOCKED_TOOLS
+                if (toolDef.needsApproval && (!autoApproveTools || blockedTool)) {
+                    // 后台模式下，需要审批且未自动批准的工具拒绝；敏感黑名单工具即使开了自动批准也拒绝
+                    val reason = if (blockedTool) "sensitive tool blocked" else "auto-approve disabled"
+                    Log.w(TAG, "Tool ${toolCall.toolName} needs approval, denying in proactive mode ($reason)")
                     executedTools.add(toolCall.copy(
-                        output = listOf(UIMessagePart.Text("""{"error":"Tool execution denied: requires user approval in proactive mode"}""")),
-                        approvalState = ToolApprovalState.Denied("Proactive mode: requires approval")
+                        output = listOf(UIMessagePart.Text("""{"error":"Tool execution denied: $reason in proactive mode"}""")),
+                        approvalState = ToolApprovalState.Denied("Proactive mode: $reason")
                     ))
                 } else {
                     // 执行工具
