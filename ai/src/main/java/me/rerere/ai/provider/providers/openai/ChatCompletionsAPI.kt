@@ -729,7 +729,7 @@ class ChatCompletionsAPI(
                             is UIMessagePart.Text -> {
                                 add(buildJsonObject {
                                     put("type", "text")
-                                    put("text", if (quoteText != null && part == parts.filterIsInstance<UIMessagePart.Text>().firstOrNull()) "$quoteText\n\n${part.text}" else part.text)
+                                    put("text", part.text)
                                 })
                             }
 
@@ -790,13 +790,15 @@ class ChatCompletionsAPI(
                 put("content", if (quoteText != null) "$quoteText\n\n$text" else text)
             } else {
                 putJsonArray("content") {
+                    var isFirstText = true
                     parts.forEach { part ->
                         when (part) {
                             is UIMessagePart.Text -> {
                                 add(buildJsonObject {
                                     put("type", "text")
-                                    put("text", part.text)
+                                    put("text", if (quoteText != null && isFirstText) "$quoteText\n\n${part.text}" else part.text)
                                 })
+                                isFirstText = false
                             }
 
                             is UIMessagePart.Image -> {
