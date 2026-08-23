@@ -28,6 +28,7 @@ data class UIMessage(
     val role: MessageRole,
     val parts: List<UIMessagePart>,
     val annotations: List<UIMessageAnnotation> = emptyList(),
+    val quote: UIMessageQuote? = null,
     val createdAt: LocalDateTime = Clock.System.now()
         .toLocalDateTime(TimeZone.currentSystemDefault()),
     val finishedAt: LocalDateTime? = null,
@@ -792,6 +793,13 @@ sealed class UIMessageAnnotation {
         val url: String
     ) : UIMessageAnnotation()
 }
+
+@Serializable
+data class UIMessageQuote(
+    val messageId: String,
+    val role: String,
+    val text: String,
+)
 
 @Serializable
 data class MessageChunk(

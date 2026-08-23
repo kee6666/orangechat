@@ -203,6 +203,7 @@ private fun ChatListNormal(
     onClearAllErrors: () -> Unit,
     onRegenerate: (UIMessage) -> Unit,
     onEdit: (UIMessage) -> Unit,
+    onQuote: (UIMessage) -> Unit,
     onForkMessage: (UIMessage) -> Unit,
     onDelete: (UIMessage) -> Unit,
     onUpdateMessage: (MessageNode) -> Unit,
@@ -345,6 +346,9 @@ private fun ChatListNormal(
                             },
                             onEdit = {
                                 onEdit(node.currentMessage)
+                            },
+                            onQuote = {
+                                onQuote(node.currentMessage)
                             },
                             onFork = {
                                 onForkMessage(node.currentMessage)

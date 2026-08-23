@@ -534,6 +534,58 @@ fun ChatInput(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+
+                        // 引用消息条
+                        state.quoteMessage?.let { quote ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(3.dp)
+                                            .height(24.dp)
+                                            .background(MaterialTheme.colorScheme.primary)
+                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(start = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = if (quote.role == "user") "引用你的回复" else "引用言的回复",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                        Text(
+                                            text = quote.text,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { state.quoteMessage = null },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = HugeIcons.Cancel01,
+                                            contentDescription = "取消引用",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         if (state.messageContent.isNotEmpty()) {
                             MediaFileInputRow(state = state)
                         }

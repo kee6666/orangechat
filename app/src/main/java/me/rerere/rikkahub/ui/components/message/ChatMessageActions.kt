@@ -53,6 +53,7 @@ import me.rerere.hugeicons.stroke.Edit01
 import me.rerere.hugeicons.stroke.FavouriteCircle
 import me.rerere.hugeicons.stroke.GitFork
 import me.rerere.hugeicons.stroke.MoreVertical
+import me.rerere.hugeicons.stroke.Quote01
 import me.rerere.hugeicons.stroke.Refresh03
 import me.rerere.hugeicons.stroke.Share04
 import me.rerere.hugeicons.stroke.StopCircle
@@ -237,6 +238,7 @@ fun ChatMessageActionsSheet(
     onEdit: () -> Unit,
     onShare: () -> Unit,
     onFork: () -> Unit,
+    onQuote: () -> Unit,
     onSelectAndCopy: () -> Unit,
     isFavorite: Boolean = false,
     onToggleFavorite: (() -> Unit)? = null,
@@ -254,6 +256,34 @@ fun ChatMessageActionsSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+
+            // Quote
+            Card(
+                onClick = {
+                    onDismissRequest()
+                    onQuote()
+                },
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.Quote01,
+                        contentDescription = null,
+                        modifier = Modifier.padding(4.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.quote),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+
             // Select and Copy
             Card(
                 onClick = {

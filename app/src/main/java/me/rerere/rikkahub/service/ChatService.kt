@@ -396,7 +396,7 @@ class ChatService(
 
     // ---- 发送消息 ----
 
-    fun sendMessage(conversationId: Uuid, content: List<UIMessagePart>, answer: Boolean = true) {
+    fun sendMessage(conversationId: Uuid, content: List<UIMessagePart>, answer: Boolean = true, quote: UIMessageQuote? = null) {
         if (content.isEmptyInputMessage()) return
 
         val session = getOrCreateSession(conversationId)
@@ -428,6 +428,7 @@ class ChatService(
                         messageNodes = latestConversation.messageNodes + UIMessage(
                             role = MessageRole.USER,
                             parts = processedContent,
+                            quote = quote,
                         ).toMessageNode(),
                     )
                     saveConversation(conversationId, newConversation)

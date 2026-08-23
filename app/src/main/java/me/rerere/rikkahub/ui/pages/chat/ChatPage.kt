@@ -52,6 +52,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.ui.UIMessageQuote
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.LeftToRightListBullet
@@ -330,7 +331,7 @@ private fun ChatPageContent(
                                 messageId = inputState.editingMessage!!,
                             )
                         } else {
-                            vm.handleMessageSend(inputState.getContents())
+                            vm.handleMessageSend(inputState.getContents(), quote = inputState.quoteMessage)
                             scope.launch {
                                 chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
                             }
@@ -362,7 +363,7 @@ private fun ChatPageContent(
                                 messageId = inputState.editingMessage!!,
                             )
                         } else {
-                            vm.handleMessageSend(content = inputState.getContents(), answer = false)
+                            vm.handleMessageSend(content = inputState.getContents(), answer = false, quote = inputState.quoteMessage)
                             scope.launch {
                                 chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
                             }
@@ -417,6 +418,13 @@ private fun ChatPageContent(
                 onEdit = {
                     inputState.editingMessage = it.id
                     inputState.setContents(it.parts)
+                },
+                onQuote = {
+                    inputState.quoteMessage = UIMessageQuote(
+                        messageId = it.id.toString(),
+                        role = it.role.name,
+                        text = it.toText().take(100),
+                    )
                 },
                 onForkMessage = {
                     scope.launch {

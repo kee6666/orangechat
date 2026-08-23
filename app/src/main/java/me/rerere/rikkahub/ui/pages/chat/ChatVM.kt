@@ -176,10 +176,10 @@ class ChatVM(
      * @param content 消息内容
      * @param answer 是否触发消息生成，如果为false，则仅添加消息到消息列表中
      */
-    fun handleMessageSend(content: List<UIMessagePart>,answer: Boolean = true) {
+    fun handleMessageSend(content: List<UIMessagePart>,answer: Boolean = true, quote: UIMessageQuote? = null) {
         if (content.isEmptyInputMessage()) return
 
-        chatService.sendMessage(_conversationId, content, answer)
+        chatService.sendMessage(_conversationId, content, answer, quote)
     }
 
     fun handleMessageEdit(parts: List<UIMessagePart>, messageId: Uuid) {

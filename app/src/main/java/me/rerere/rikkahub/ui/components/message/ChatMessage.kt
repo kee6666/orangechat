@@ -134,6 +134,7 @@ fun ChatMessage(
     onFork: () -> Unit,
     onRegenerate: () -> Unit,
     onEdit: () -> Unit,
+    onQuote: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onUpdate: (MessageNode) -> Unit,
@@ -197,6 +198,47 @@ fun ChatMessage(
             }
         }
         ProvideTextStyle(textStyle) {
+
+        // 引用块
+        message.quote?.let { quote ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                tonalElevation = 0.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(30.dp)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                    Column(
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text(
+                            text = if (quote.role == "user") "你" else "言",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = quote.text,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+
             MessagePartsBlock(
                 assistant = assistant,
                 role = message.role,
@@ -256,6 +298,7 @@ fun ChatMessage(
             onDelete = onDelete,
             onShare = onShare,
             onFork = onFork,
+            onQuote = onQuote,
             model = model,
             onSelectAndCopy = {
                 showSelectCopySheet = true
