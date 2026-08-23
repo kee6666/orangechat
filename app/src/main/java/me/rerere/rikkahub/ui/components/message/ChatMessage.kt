@@ -134,7 +134,7 @@ fun ChatMessage(
     onFork: () -> Unit,
     onRegenerate: () -> Unit,
     onEdit: () -> Unit,
-    onQuote: () -> Unit,
+    onQuote: () -> Unit = {},
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onUpdate: (MessageNode) -> Unit,
