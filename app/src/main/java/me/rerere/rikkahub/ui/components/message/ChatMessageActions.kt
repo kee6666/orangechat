@@ -53,7 +53,7 @@ import me.rerere.hugeicons.stroke.Edit01
 import me.rerere.hugeicons.stroke.FavouriteCircle
 import me.rerere.hugeicons.stroke.GitFork
 import me.rerere.hugeicons.stroke.MoreVertical
-import me.rerere.hugeicons.stroke.Quote01
+import me.rerere.hugeicons.stroke.MessageAdd01
 import me.rerere.hugeicons.stroke.Refresh03
 import me.rerere.hugeicons.stroke.Share04
 import me.rerere.hugeicons.stroke.StopCircle
@@ -273,7 +273,7 @@ fun ChatMessageActionsSheet(
                         .fillMaxWidth()
                 ) {
                     Icon(
-                        imageVector = HugeIcons.Quote01,
+                        imageVector = HugeIcons.MessageAdd01,
                         contentDescription = null,
                         modifier = Modifier.padding(4.dp)
                     )

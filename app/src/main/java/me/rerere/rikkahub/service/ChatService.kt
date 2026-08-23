@@ -56,6 +56,7 @@ import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.ui.UIMessageQuote
 import me.rerere.ai.ui.canResumeToolExecution
 import me.rerere.ai.ui.finishPendingTools
 import me.rerere.ai.ui.finishReasoning
