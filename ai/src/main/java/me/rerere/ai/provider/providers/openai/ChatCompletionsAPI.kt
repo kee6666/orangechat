@@ -729,7 +729,7 @@ class ChatCompletionsAPI(
                             is UIMessagePart.Text -> {
                                 add(buildJsonObject {
                                     put("type", "text")
-                                    put("text", part.text)
+                                    put("text", if (quoteText != null && part == parts.filterIsInstance<UIMessagePart.Text>().firstOrNull()) "$quoteText\n\n${part.text}" else part.text)
                                 })
                             }
 
@@ -779,10 +779,15 @@ class ChatCompletionsAPI(
         add(buildJsonObject {
             put("role", JsonPrimitive(message.role.name.lowercase()))
 
-            // 模型不支持图片时, 先过滤掉 Image part, 避免发送 image_url 触发 "Model only support text input"
+            // 引用内容作为可见前缀拼入消息，让模型能"看见"用户引用的是哪句话
+            val quoteText = message.quote?.let { q ->
+                val who = if (q.role == "user") "你" else "言"
+                "[引用" + who + "说的话] " + q.text.replace('\n', ' ')
+            }
             val parts = if (supportsImage) message.parts else message.parts.filter { it !is UIMessagePart.Image }
             if (parts.isOnlyTextPart()) {
-                put("content", parts.filterIsInstance<UIMessagePart.Text>().first().text)
+                val text = parts.filterIsInstance<UIMessagePart.Text>().first().text
+                put("content", if (quoteText != null) "$quoteText\n\n$text" else text)
             } else {
                 putJsonArray("content") {
                     parts.forEach { part ->

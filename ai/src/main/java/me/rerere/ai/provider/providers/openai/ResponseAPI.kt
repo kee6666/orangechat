@@ -437,6 +437,14 @@ class ResponseAPI(
     }
 
     private fun JsonArrayBuilder.addUserItems(message: UIMessage) {
+        // 引用内容作为独立 user item 前置，让模型能看到用户引用了哪句话
+        message.quote?.let { q ->
+            val who = if (q.role == "user") "你" else "言"
+            add(buildJsonObject {
+                put("role", JsonPrimitive(message.role.name.lowercase()))
+                put("content", "[引用" + who + "说的话] " + q.text.replace('\n', ' '))
+            })
+        }
         val contentParts = message.parts.filter { it is UIMessagePart.Text || it is UIMessagePart.Image }
         if (contentParts.isNotEmpty()) {
             addContentItem(message.role, contentParts)

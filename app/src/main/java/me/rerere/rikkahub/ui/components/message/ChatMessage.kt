@@ -135,6 +135,7 @@ fun ChatMessage(
     onRegenerate: () -> Unit,
     onEdit: () -> Unit,
     onQuote: () -> Unit = {},
+    canQuote: Boolean = true,
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onUpdate: (MessageNode) -> Unit,
@@ -299,6 +300,7 @@ fun ChatMessage(
             onShare = onShare,
             onFork = onFork,
             onQuote = onQuote,
+            canQuote = canQuote,
             model = model,
             onSelectAndCopy = {
                 showSelectCopySheet = true

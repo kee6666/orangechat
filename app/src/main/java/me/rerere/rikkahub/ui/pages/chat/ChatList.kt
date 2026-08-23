@@ -352,6 +352,7 @@ private fun ChatListNormal(
                             onQuote = {
                                 onQuote(node.currentMessage)
                             },
+                            canQuote = index >= (displayNodes.size - 200).coerceAtLeast(0),
                             onFork = {
                                 onForkMessage(node.currentMessage)
                             },

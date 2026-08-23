@@ -463,6 +463,14 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         add(buildJsonObject {
             put("role", message.role.name.lowercase())
             putJsonArray("content") {
+                // 引用内容作为独立可见 block 前置，让模型能看到用户引用了哪句话
+                message.quote?.let { q ->
+                    val who = if (q.role == "user") "你" else "言"
+                    add(buildJsonObject {
+                        put("type", "text")
+                        put("text", "[引用" + who + "说的话] " + q.text.replace('\n', ' '))
+                    })
+                }
                 message.parts.mapNotNull { it.toContentBlock() }.forEach { add(it) }
             }
         })

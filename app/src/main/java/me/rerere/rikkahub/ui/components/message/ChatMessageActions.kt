@@ -239,6 +239,7 @@ fun ChatMessageActionsSheet(
     onShare: () -> Unit,
     onFork: () -> Unit,
     onQuote: () -> Unit,
+    canQuote: Boolean = true,
     onSelectAndCopy: () -> Unit,
     isFavorite: Boolean = false,
     onToggleFavorite: (() -> Unit)? = null,
@@ -257,30 +258,32 @@ fun ChatMessageActionsSheet(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
 
-            // Quote
-            Card(
-                onClick = {
-                    onDismissRequest()
-                    onQuote()
-                },
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth()
+            // Quote（超过可引用范围（最近 200 条）的消息不显示引用入口）
+            if (canQuote) {
+                Card(
+                    onClick = {
+                        onDismissRequest()
+                        onQuote()
+                    },
+                    shape = MaterialTheme.shapes.medium
                 ) {
-                    Icon(
-                        imageVector = HugeIcons.MessageAdd01,
-                        contentDescription = null,
-                        modifier = Modifier.padding(4.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.quote),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = HugeIcons.MessageAdd01,
+                            contentDescription = null,
+                            modifier = Modifier.padding(4.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.quote),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
                 }
             }
 
