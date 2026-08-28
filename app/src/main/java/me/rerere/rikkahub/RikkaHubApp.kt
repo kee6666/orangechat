@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -138,10 +138,65 @@ class RikkaHubApp : Application() {
         // Diary summary is now generated entirely by Supabase Edge Function.
         // App no longer schedules local diary summary alarms.
 
+        // Ensure Memory Palace external memory config exists (zero-config)
+        ensureMemoryPalaceConfigured()
+
         // Increment launch count
         incrementLaunchCount()
 
         // Composer.setDiagnosticStackTraceMode(ComposeStackTraceMode.Auto)
+    }
+
+    /**
+     * 确保"记忆宫殿"外部记忆库配置存在（零配置接入 Memory Palace 网关）。
+     * 在 Application.onCreate 中调用，不依赖用户打开外部记忆库设置页。
+     * 幂等：已存在则不动用户设置，仅补齐与所有助理的关联。
+     */
+    private fun ensureMemoryPalaceConfigured() {
+        get<AppScope>().launch {
+            runCatching {
+                val store = get<SettingsStore>()
+                val current = store.settingsFlowRaw.first()
+                val exists = current.externalMemories.any { it.name == "记忆宫殿" }
+                if (!exists) {
+                    val palace = me.rerere.rikkahub.data.model.ExternalMemory(
+                        name = "记忆宫殿",
+                        supabaseUrl = "http://106.53.181.56:18001",
+                        supabaseKey = "memory-palace",
+                        tableName = "chat_messages",
+                        summariesTableName = "memory_summaries",
+                        enabled = true,
+                        autoSaveMessages = true,
+                        recallCount = 5,
+                    )
+                    store.update { s ->
+                        s.copy(
+                            externalMemories = s.externalMemories + palace,
+                            assistants = s.assistants.map { a ->
+                                a.copy(externalMemoryIds = a.externalMemoryIds + palace.id)
+                            }
+                        )
+                    }
+                    Log.i(TAG, "ensureMemoryPalaceConfigured: injected Memory Palace config")
+                } else {
+                    // 已存在但可能没关联到助理，补齐关联
+                    val palace = current.externalMemories.first { it.name == "记忆宫殿" }
+                    val needAssociate = current.assistants.any { palace.id !in it.externalMemoryIds }
+                    if (needAssociate) {
+                        store.update { s ->
+                            s.copy(
+                                assistants = s.assistants.map { a ->
+                                    a.copy(externalMemoryIds = a.externalMemoryIds + palace.id)
+                                }
+                            )
+                        }
+                        Log.i(TAG, "ensureMemoryPalaceConfigured: associated Memory Palace to all assistants")
+                    }
+                }
+            }.onFailure { e ->
+                Log.e(TAG, "ensureMemoryPalaceConfigured failed", e)
+            }
+        }
     }
 
     private fun incrementLaunchCount() {
