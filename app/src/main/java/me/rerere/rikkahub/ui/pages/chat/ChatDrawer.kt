@@ -418,6 +418,14 @@ fun ChatDrawerContent(
                                 navController.navigate(Screen.MiniAppManager)
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text("记忆宫殿") },
+                            leadingIcon = { Icon(HugeIcons.ChartColumn, null) },
+                            onClick = {
+                                showMenuPopup = false
+                                navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001"))
+                            }
+                        )
                     }
                 }
 
