@@ -22,6 +22,37 @@ class ExternalMemoriesVM(
     val settings = settingsStore.settingsFlow
         .stateIn(viewModelScope, SharingStarted.Lazily, Settings.dummy())
 
+    init {
+        // 自动注入"记忆宫殿"外部记忆库（Memory Palace 网关），零配置开箱即用
+        viewModelScope.launch {
+            runCatching {
+                settingsStore.update { current ->
+                    val exists = current.externalMemories.any { it.name == "记忆宫殿" }
+                    if (!exists) {
+                        val palace = ExternalMemory(
+                            name = "记忆宫殿",
+                            supabaseUrl = "http://106.53.181.56:18001",
+                            supabaseKey = "memory-palace",
+                            tableName = "chat_messages",
+                            summariesTableName = "memory_summaries",
+                            enabled = true,
+                            autoSaveMessages = true,
+                            recallCount = 5,
+                        )
+                        current.copy(
+                            externalMemories = current.externalMemories + palace,
+                            assistants = current.assistants.map { a ->
+                                a.copy(externalMemoryIds = a.externalMemoryIds + palace.id)
+                            }
+                        )
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+    }
+
     fun addExternalMemory(
         name: String,
         supabaseUrl: String,
