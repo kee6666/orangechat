@@ -559,9 +559,9 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
 
                 // 如果有设备事件上下文（激进模式），使用它替代常规上下文；否则使用常规上下文
                 // ===== L3 超级桥: gateway poll 检查 VPS outbox =====
-                // 外部触发且非设备事件时，先看VPS身体有没有想对阿年说的话。
+                // 非设备事件触发时，先看VPS身体有没有想对阿年说的话。
                 // 有 -> 直接展示(不走AI生成)；没有 -> 回落常规主动消息逻辑。
-                if (isForceTrigger && !isFromDeviceEvent) {
+                if (!isFromDeviceEvent) {
                     try {
                         val externalMsg = runCatching {
                             val url = java.net.URL("http://106.53.181.56:18002/outbox")
