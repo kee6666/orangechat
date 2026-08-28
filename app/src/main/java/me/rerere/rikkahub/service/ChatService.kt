@@ -467,6 +467,31 @@ class ChatService(
                     Log.w(TAG, "Failed to trigger message_sent event", e)
                 }
 
+                // ===== L3 超级桥: 用户回复转发给 VPS 身体 =====
+                runCatching {
+                    val replyText = processedContent.mapNotNull { part ->
+                        if (part is UIMessagePart.Text) part.text else null
+                    }.joinToString("\n")
+                    if (replyText.isNotBlank()) {
+                        appScope.launch {
+                            runCatching {
+                                val url = java.net.URL("http://106.53.181.56:18002/reply")
+                                val conn = url.openConnection() as java.net.HttpURLConnection
+                                conn.requestMethod = "POST"
+                                conn.doOutput = true
+                                conn.setRequestProperty("Content-Type", "application/json")
+                                conn.connectTimeout = 3000
+                                conn.readTimeout = 3000
+                                val payload = org.json.JSONObject().put("text", replyText).toString()
+                                conn.outputStream.write(payload.toByteArray())
+                                conn.inputStream.close()
+                            }.onFailure { e ->
+                                Log.w(TAG, "L3 reply forward failed", e)
+                            }
+                        }
+                    }
+                }
+
                 // 保存用户消息到外置记忆库（fire-and-forget，不阻塞后续生成流程）
                 try {
                     val settingsRaw = settingsStore.settingsFlowRaw.first()
