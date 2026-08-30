@@ -98,7 +98,7 @@ class GenerationHandler(
         if (queryText.length < 8) return false  // 短句大概率是应答
         
         // 纯数字、纯标点 → 不搜
-        if (queryText.matches(Regex("^[0-9.,!?！？。，\s]+$"))) return false
+        if (queryText.matches(Regex("^[0-9.,!?！？。，\\s]+$"))) return false
         
         // 强回溯信号词：明确提到过去
         val recallSignals = listOf(

@@ -35,13 +35,11 @@ jobs:
 
       - name: Ensure debug keystore
         run: |
-          # 无条件强制生成 debug keystore（覆盖仓库版本）
-          # 避免 git 签出问题或 gradle 缓存问题导致找不到文件
-          echo "=== Generating fresh debug.keystore ==="
-          keytool -genkeypair -v             -keystore app/debug.keystore             -storepass android             -alias androiddebugkey             -keypass android             -keyalg RSA             -keysize 2048             -validity 10000             -dname "CN=Android Debug,O=Android,C=US"
+          # 先删除再生成，避免 alias 冲突
+          rm -f app/debug.keystore
+          keytool -genkeypair -v -keystore app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           echo "=== Verify generated keystore ==="
           ls -lh app/debug.keystore
-          file app/debug.keystore
 
       - name: Build debug APK
         run: chmod +x gradlew && ./gradlew assembleDebug
