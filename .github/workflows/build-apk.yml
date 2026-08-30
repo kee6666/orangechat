@@ -35,6 +35,17 @@ jobs:
 
       - name: Ensure debug keystore
         run: |
+          # 调试：列出app/目录内容
+          echo "=== ls -la app/ ==="
+          ls -la app/ | head -20
+          echo "=== checking app/debug.keystore ==="
+          if [ -f app/debug.keystore ]; then
+            echo "✓ app/debug.keystore exists"
+            ls -lh app/debug.keystore
+          else
+            echo "✗ app/debug.keystore NOT FOUND, generating..."
+          fi
+          
           # 优先使用仓库内固定的 debug.keystore (JKS, alias=androiddebugkey, pass=android)
           # 保证所有构建签名一致，支持直接覆盖安装。
           # 仅在仓库缺失时兜底生成（不应发生，纯防御）。
