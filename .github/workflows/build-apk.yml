@@ -31,17 +31,22 @@ jobs:
       - name: Install web-ui dependencies
         run: cd web-ui && pnpm install
 
-      - name: Generate debug keystore
+      - name: Ensure debug keystore
         run: |
-          keytool -genkeypair -v \
-            -keystore app/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          # 优先使用仓库内固定的 debug.keystore (JKS, alias=androiddebugkey, pass=android)
+          # 保证所有构建签名一致，支持直接覆盖安装。
+          # 仅在仓库缺失时兜底生成（不应发生，纯防御）。
+          if [ ! -f app/debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore app/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
       - name: Build debug APK
         run: chmod +x gradlew && ./gradlew assembleDebug
