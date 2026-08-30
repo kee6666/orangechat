@@ -385,7 +385,18 @@ class LocalTools(
             },
             needsApproval = true,
             execute = {
-                error("ask_user tool should be handled by HITL flow")
+                // 兜底：正常情况下 ask_user 必须由 HITL 流程拦截（用户回答问题 -> Answered 状态），
+                // 不应走到 execute。若意外执行（例如历史消息反序列化后状态异常），
+                // 返回友好提示而非抛异常，避免整轮生成崩溃。
+                listOf(
+                    UIMessagePart.Text(
+                        kotlinx.serialization.json.Json.encodeToString(
+                            kotlinx.serialization.json.buildJsonObject {
+                                put("error", "ask_user requires user interaction; please ask the question directly in the chat instead")
+                            }
+                        )
+                    )
+                )
             }
         )
     }
