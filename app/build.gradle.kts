@@ -82,6 +82,7 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+            storeType = "PKCS12"
         }
     }
 

@@ -53,7 +53,7 @@ sealed class ASRProviderSetting {
         override val name: String = "SiliconFlow ASR",
         val apiKey: String = "",
         val baseUrl: String = "https://api.siliconflow.cn/v1/audio/transcriptions",
-        val model: String = "FunAudioLLM/Spirit-tiny",
+        val model: String = "FunAudioLLM/SenseVoiceSmall",
         val language: String = "",
         val sampleRate: Int = 16000,
     ) : ASRProviderSetting() {
