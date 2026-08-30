@@ -89,6 +89,43 @@ class GenerationHandler(
     private val aiLoggingManager: AILoggingManager,
     private val memoryBankService: MemoryBankService,
 ) {
+    /**
+     * 判断用户消息是否需要召回历史记忆。
+     * 策略：只有明确提到"之前发生的事"时才搜索，避免无意义的全局搜索。
+     */
+    private fun shouldRecallMemory(queryText: String): Boolean {
+        if (queryText.isBlank()) return false
+        if (queryText.length < 8) return false  // 短句大概率是应答
+        
+        // 纯数字、纯标点 → 不搜
+        if (queryText.matches(Regex("^[0-9.,!?！？。，\s]+$"))) return false
+        
+        // 强回溯信号词：明确提到过去
+        val recallSignals = listOf(
+            "之前", "以前", "那天", "那次", "那时", "当时", "那会",
+            "上次", "前几天", "昨天", "记得", "还记得", "记不记得",
+            "说过", "聊过", "提过", "讲过", "告诉过",
+            "纪念日", "生日", "立约", "约定", "承诺", "规则",
+            "第一次", "那一次", "之后", "后来"
+        )
+        if (recallSignals.any { queryText.contains(it) }) return true
+        
+        // 疑问句 + 可能需要历史信息
+        if (queryText.contains("?") || queryText.contains("？")) {
+            val historyQuestions = listOf(
+                "什么时候", "哪天", "哪次", "多久", "几次",
+                "怎么说", "为什么", "是不是", "对吗"
+            )
+            if (historyQuestions.any { queryText.contains(it) }) return true
+        }
+        
+        // 长消息（>80字）可能涉及复杂上下文
+        if (queryText.length > 80) return true
+        
+        // 默认不搜
+        return false
+    }
+
     fun generateText(
         settings: Settings,
         model: Model,
@@ -410,6 +447,13 @@ class GenerationHandler(
                     if (externalMemoryConfigs.isNotEmpty()) {
                         val lastUserMessage = messages.lastOrNull { it.role == MessageRole.USER }
                         val queryText = lastUserMessage?.toText()?.take(200)?.trim() ?: ""
+                        
+                        // 判断是否需要召回历史记忆（避免无意义的全局搜索）
+                        val needRecall = shouldRecallMemory(queryText)
+                        if (!needRecall) {
+                            Log.d(TAG, "Skip memory recall: [$queryText] doesn't reference past events")
+                        }
+                        
                         // 并发检索所有外置记忆库配置，每个配置最多 8 秒超时
                         val allRecalled = coroutineScope {
                             externalMemoryConfigs.map { config ->
@@ -418,6 +462,11 @@ class GenerationHandler(
                                         runCatching {
                                             val service = me.rerere.rikkahub.data.service.ExternalMemoryService(config)
                                             val recalled = mutableListOf<String>()
+                                            
+                                            // 如果不需要召回，直接返回空列表
+                                            if (!needRecall) {
+                                                return@runCatching recalled
+                                            }
 
                             // 如果配置了向量模型且开启了日记摘要，使用向量召回日记摘要
                             if (config.embeddingModelId != null && queryText.isNotBlank() && config.autoSaveDiarySummary) {
