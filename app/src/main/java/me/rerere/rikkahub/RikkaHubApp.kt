@@ -36,6 +36,7 @@ import me.rerere.rikkahub.plugin.di.pluginModule
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.service.DailySummaryService
+import me.rerere.rikkahub.data.service.DeviceSenseReporter
 import me.rerere.rikkahub.data.service.DeviceEventAiTriggerService
 import me.rerere.rikkahub.data.service.DeviceEventTrackingService
 import me.rerere.rikkahub.data.service.ProactiveMessageService
@@ -140,6 +141,9 @@ class RikkaHubApp : Application() {
 
         // Ensure Memory Palace external memory config exists (zero-config)
         ensureMemoryPalaceConfigured()
+
+        // Start device sense reporter (screen on/off + foreground app -> VPS /sense)
+        DeviceSenseReporter.start(get<AppScope>(), applicationContext)
 
         // Increment launch count
         incrementLaunchCount()
