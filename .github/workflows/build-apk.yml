@@ -35,31 +35,13 @@ jobs:
 
       - name: Ensure debug keystore
         run: |
-          # 调试：列出app/目录内容
-          echo "=== ls -la app/ ==="
-          ls -la app/ | head -20
-          echo "=== checking app/debug.keystore ==="
-          if [ -f app/debug.keystore ]; then
-            echo "✓ app/debug.keystore exists"
-            ls -lh app/debug.keystore
-          else
-            echo "✗ app/debug.keystore NOT FOUND, generating..."
-          fi
-          
-          # 优先使用仓库内固定的 debug.keystore (JKS, alias=androiddebugkey, pass=android)
-          # 保证所有构建签名一致，支持直接覆盖安装。
-          # 仅在仓库缺失时兜底生成（不应发生，纯防御）。
-          if [ ! -f app/debug.keystore ]; then
-            keytool -genkeypair -v \
-              -keystore app/debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          # 无条件强制生成 debug keystore（覆盖仓库版本）
+          # 避免 git 签出问题或 gradle 缓存问题导致找不到文件
+          echo "=== Generating fresh debug.keystore ==="
+          keytool -genkeypair -v             -keystore app/debug.keystore             -storepass android             -alias androiddebugkey             -keypass android             -keyalg RSA             -keysize 2048             -validity 10000             -dname "CN=Android Debug,O=Android,C=US"
+          echo "=== Verify generated keystore ==="
+          ls -lh app/debug.keystore
+          file app/debug.keystore
 
       - name: Build debug APK
         run: chmod +x gradlew && ./gradlew assembleDebug
