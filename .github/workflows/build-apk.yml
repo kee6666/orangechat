@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 拉完整历史，确保 debug.keystore 被 checkout
 
       - name: Init material submodule
         run: git submodule update --init material3/material-color-utilities
