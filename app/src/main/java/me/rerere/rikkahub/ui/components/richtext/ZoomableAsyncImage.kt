@@ -45,7 +45,7 @@ fun ZoomableAsyncImage(
         .data(model)
         .placeholder(placeholder)
         .crossfade(false)
-        .allowHardware(!export)
+        .allowHardware(false) // 禁用硬件位图，防止软件渲染崩溃
         .build()
     var loading by remember { mutableStateOf(false) }
     AsyncImage(

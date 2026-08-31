@@ -231,6 +231,9 @@ class RouteActivity : ComponentActivity() {
                 setSingletonImageLoaderFactory { context ->
                     ImageLoader.Builder(context)
                         .crossfade(true)
+                        // 禁用硬件位图：防止启动时软件渲染阶段绘制硬件位图崩溃
+                        // (Software rendering doesn't support hardware bitmaps)
+                        .allowHardware(false)
                         .components {
                             add(OkHttpNetworkFetcherFactory(
                                 callFactory = { okHttpClient },
