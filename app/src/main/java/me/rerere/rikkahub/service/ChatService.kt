@@ -1064,7 +1064,7 @@ addAll(localTools.getTools(assistant.localTools, me.rerere.rikkahub.data.ai.tool
                 if (match != null) {
                     val quoteBlock = match.groupValues[0]
                     val quoteText = quoteBlock.lines()
-                        .map { it.replace(Regex("^\s*>\s*"), "").trim() }
+                        .map { it.replace(Regex("""^\s*>\s*"""), "").trim() }
                         .filter { it.isNotBlank() }
                         .joinToString("\n")
                         .take(100)
