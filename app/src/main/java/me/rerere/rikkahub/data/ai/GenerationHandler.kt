@@ -576,6 +576,20 @@ class GenerationHandler(
                     appendLine("If you determine that no reply is needed (e.g., the user's message doesn't require a response, or you have nothing meaningful to add), you may reply with exactly `[SKIP]` (without any other text). This message will be hidden from the user. Use this sparingly and only when truly appropriate.")
                 }
 
+                // AI侧引用能力：AI可以用markdown引用语法引用用户之前说过的话
+                if (true) {
+                    appendLine()
+                    appendLine()
+                    appendLine("## 引用能力")
+                    appendLine("你可以引用用户之前说过的话（比如回应她提到过的旧事、纠正、强调某句话）。")
+                    appendLine("用法：在回复中先写一行引用，格式为 `> 用户原话`（markdown blockquote），可以多行引用，然后换行再写你的回复正文。")
+                    appendLine("这样用户看到的回复会带一个引用块，清楚知道你在回应她哪句话。")
+                    appendLine("注意：")
+                    appendLine("- 只在确实要引用用户原话时才用，不要为凑数而引用")
+                    appendLine("- 引用块要放在回复开头，正文在引用之后")
+                    appendLine("- 引用内容应尽量贴近用户原话，方便匹配")
+                }
+ 
                 // 屏幕跳转能力（AI总是可以跳转，不需要开关）
                 if (true) {
                     appendLine()

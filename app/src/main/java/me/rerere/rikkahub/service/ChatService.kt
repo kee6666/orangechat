@@ -1051,6 +1051,58 @@ addAll(localTools.getTools(assistant.localTools, me.rerere.rikkahub.data.ai.tool
                 Log.w(TAG, "Failed to handle [JUMP] in normal chat", e)
             }
 
+            // AI侧引用解析：检测AI回复开头的markdown引用块（> xxx），提取为quote字段
+            try {
+                val lastAssistantMessage = finalConversation.currentMessages.lastOrNull { it.role == MessageRole.ASSISTANT }
+                val rawText = lastAssistantMessage?.parts?.filterIsInstance<UIMessagePart.Text>()
+                    ?.joinToString("\n") { it.text } ?: ""
+                // 匹配开头的连续markdown引用行：> xxx
+                val quoteBlockRegex = Regex("""(?s)^(?:\s*>\s*[^
+]*
+?)+""")
+                val match = quoteBlockRegex.find(rawText)
+                if (match != null) {
+                    val quoteBlock = match.groupValues[0]
+                    val quoteText = quoteBlock.lines()
+                        .map { it.replace(Regex("^\s*>\s*"), "").trim() }
+                        .filter { it.isNotBlank() }
+                        .joinToString("\n")
+                        .take(100)
+                    if (quoteText.isNotBlank()) {
+                        val cleanedText = rawText.replace(match.groupValues[0], "").trim()
+                        val quotedMessage = lastAssistantMessage!!.copy(
+                            quote = UIMessageQuote(
+                                messageId = "",
+                                role = "user",
+                                text = quoteText,
+                            ),
+                            parts = if (cleanedText.isNotBlank()) {
+                                listOf(UIMessagePart.Text(cleanedText))
+                            } else {
+                                emptyList()
+                            }
+                        )
+                        val quotedConversation = finalConversation.copy(
+                            messageNodes = finalConversation.messageNodes.map { node ->
+                                node.copy(
+                                    messages = node.messages.map { msg ->
+                                        if (msg.id == quotedMessage.id) quotedMessage else msg
+                                    }
+                                )
+                            }
+                        )
+                        updateConversation(conversationId, quotedConversation)
+                        // 敏感：覆盖 saveMutex 锁内刚存的 finalConversation
+                        session.saveMutex.withLock {
+                            saveConversation(conversationId, quotedConversation)
+                        }
+                        Log.d(TAG, "AI quote parsed: [${quoteText.take(30)}...]")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse AI quote", e)
+            }
+
             // 触发 message_received 事件钩子
             // 同 message_sent: 用 appScope.launch 提交独立协程, 不阻塞 handleMessageComplete
             // 后续的标题生成/建议生成等流程, 也不随上一条消息的 job 取消而中断。
