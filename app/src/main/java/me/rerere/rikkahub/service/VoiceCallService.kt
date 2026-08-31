@@ -99,6 +99,9 @@ class VoiceCallService : Service(), KoinComponent {
     // 静音状态 (独立于 _uiState.isMuted, 检测循环里直接读这个字段更快)
     private var isMuted: Boolean = false
 
+    // 手动发送标志: requestSend 触发 asr.stop() 后, 等待识别完成自动发送
+    private var pendingManualSend: Boolean = false
+
     companion object {
         private val _activeConversationId = MutableStateFlow<String?>(null)
         val activeConversationId: StateFlow<String?> = _activeConversationId.asStateFlow()
@@ -300,6 +303,7 @@ class VoiceCallService : Service(), KoinComponent {
      * 不再调用 asr.stop()/asr.start() (ASR 现在贯穿全程).
      */
     private fun startListening() {
+        pendingManualSend = false
         tts.stop()
         ttsSentLength = 0
         lastAssistantText = ""
@@ -408,10 +412,11 @@ class VoiceCallService : Service(), KoinComponent {
 
         // 转写为空（一次性 ASR 还没识别）：强制 stop 触发识别
         Log.d(TAG, "requestSend: transcript empty, forcing asr.stop() to flush recognition")
+        pendingManualSend = true
         runCatching {
             asr.stop()
         }.onFailure { Log.e(TAG, "requestSend: asr.stop failed", it) }
-        // 识别完成后 startAsrMonitor 检测到 Recording->Idle 且有 transcript 会自动发送
+        // 识别完成后 startAsrMonitor 检测到 pendingManualSend 标志, 自动发送
     }
 
     /**
@@ -419,6 +424,7 @@ class VoiceCallService : Service(), KoinComponent {
      * 不再调用 asr.stop() (ASR 要持续跑到整场通话结束).
      */
     private fun sendCurrentMessage() {
+        pendingManualSend = false
         val transcript = _uiState.value.userTranscript.trim()
         vadJob?.cancel()
 
@@ -515,8 +521,21 @@ class VoiceCallService : Service(), KoinComponent {
     }
 
     private suspend fun onGenerationDone() {
+        // 竞态修复: conversationMonitor 可能还没更新 assistantText,
+        // 主动从 conversation 读取最新 assistant 消息
+        var finalText = _uiState.value.assistantText
+        if (finalText.isBlank()) {
+            val conv = conversation.value
+            val last = conv.currentMessages.lastOrNull()
+            if (last?.role == MessageRole.ASSISTANT) {
+                val t = last.toText()
+                if (t.isNotBlank()) {
+                    _uiState.update { it.copy(assistantText = t) }
+                    finalText = t
+                }
+            }
+        }
         // 朗读最后剩余的文本
-        val finalText = _uiState.value.assistantText
         if (finalText.length > ttsSentLength) {
             val remaining = finalText.substring(ttsSentLength)
             if (remaining.isNotBlank()) {
@@ -681,7 +700,9 @@ class VoiceCallService : Service(), KoinComponent {
                 // 检测到从 Recording 变为非 Recording
                 if (wasRecording && !isRecording && !isMuted && _uiState.value.status == VoiceCallStatus.Listening) {
                     val transcript = asrState.transcript.trim()
-                    if (transcript.isNotEmpty() && _uiState.value.autoSendEnabled) {
+                    val shouldSend = pendingManualSend || (transcript.isNotEmpty() && _uiState.value.autoSendEnabled)
+                    pendingManualSend = false
+                    if (shouldSend && transcript.isNotEmpty()) {
                         Log.d(TAG, "ASR monitor: Auto-send after ASR completed: $transcript")
                         sendCurrentMessage()
                     } else {
