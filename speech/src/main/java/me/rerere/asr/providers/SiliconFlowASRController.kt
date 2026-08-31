@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -332,8 +332,8 @@ class SiliconFlowASRController(
                     amplitudes.takeLast(3).average().toFloat()
                 } else 0f
 
-                // 检测是否有语音活动
-                if (recentAmplitude > 0.03f) {
+                // 检测是否有语音活动 (阈值调低, 避免低增益麦克风/轻声说话识别不出)
+                if (recentAmplitude > 0.012f) {
                     lastAmplitudeTime = System.currentTimeMillis()
                     if (!speechDetected) {
                         speechDetected = true

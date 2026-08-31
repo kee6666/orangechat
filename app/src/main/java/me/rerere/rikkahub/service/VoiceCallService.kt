@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -385,6 +385,33 @@ class VoiceCallService : Service(), KoinComponent {
                 }
             }
         }
+    }
+
+    /**
+     * 手动发送当前说的话（用户点"发送"按钮触发）.
+     *
+     * 兼容两种 ASR：
+     * - 流式 ASR（OpenAI Realtime / Volcengine）：userTranscript 已有内容，直接发送
+     * - 一次性 ASR（SiliconFlow / MiMo）：录音还在缓冲里，从未送去识别，
+     *   这里强制 asr.stop() 触发识别，识别完成后 startAsrMonitor 会拿到 transcript 再发送
+     */
+    fun requestSend() {
+        if (_uiState.value.status != VoiceCallStatus.Listening) return
+        if (isMuted) return
+
+        val current = _uiState.value.userTranscript.trim()
+        if (current.isNotEmpty()) {
+            // 已有转写内容，直接发送
+            sendCurrentMessage()
+            return
+        }
+
+        // 转写为空（一次性 ASR 还没识别）：强制 stop 触发识别
+        Log.d(TAG, "requestSend: transcript empty, forcing asr.stop() to flush recognition")
+        runCatching {
+            asr.stop()
+        }.onFailure { Log.e(TAG, "requestSend: asr.stop failed", it) }
+        // 识别完成后 startAsrMonitor 检测到 Recording->Idle 且有 transcript 会自动发送
     }
 
     /**

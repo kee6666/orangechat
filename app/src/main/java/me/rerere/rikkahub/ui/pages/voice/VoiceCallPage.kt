@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -265,10 +266,11 @@ fun VoiceCallPage(
                 )
             }
 
-            // 底部: 只有两个按钮 (ChatGPT 风格)
-            // 左: 静音, 右: 挂断.
+            // 底部: 三个按钮 - 左: 静音, 中: 发送, 右: 挂断
+            // 发送按钮用于一次性 ASR (SiliconFlow/MiMo): 它们只在 stop() 时才识别,
+            // 手动点发送可以强制触发识别并发送当前说的话.
             Row(
-                horizontalArrangement = Arrangement.spacedBy(56.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 64.dp)
             ) {
@@ -288,6 +290,24 @@ fun VoiceCallPage(
                     iconTint = Color.White,
                     enabled = canControl
                 )
+
+                // 发送按钮: 手动把当前说的话发出去 (仅聆听时可用)
+                val canSend = canControl && uiState.status == VoiceCallStatus.Listening
+                Surface(
+                    onClick = { boundService?.requestSend() },
+                    shape = RoundedCornerShape(50),
+                    color = if (canSend) accentColor.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.2f),
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "发送",
+                            color = if (canSend) Color.White else Color.White.copy(alpha = 0.5f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
 
                 // 挂断按钮
                 ControlButton(
