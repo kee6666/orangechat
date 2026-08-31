@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -50,6 +50,7 @@ import me.rerere.rikkahub.data.ai.transformers.OutputMessageTransformer
 import me.rerere.rikkahub.data.ai.transformers.onGenerationFinish
 import me.rerere.rikkahub.data.ai.transformers.transforms
 import me.rerere.rikkahub.data.ai.transformers.visualTransforms
+import me.rerere.rikkahub.data.ai.tools.ToolRouter
 import me.rerere.rikkahub.data.ai.tools.buildMemoryTools
 import me.rerere.rikkahub.data.ai.tools.buildWriteFilesTool
 import me.rerere.rikkahub.data.datastore.Settings
@@ -175,6 +176,15 @@ class GenerationHandler(
                 add(buildWriteFilesTool(conversationId))
                 addAll(tools)
             }
+
+            // 工具路由：仅在新回合（最后一条消息是用户消息）按关键词过滤工具，
+            // 工具循环中（最后是 assistant 的 tool call/result）不过滤，避免打断连续调用。
+            val toolsForStep = if (messages.lastOrNull()?.role == MessageRole.USER) {
+                val userText = messages.lastOrNull()?.toText()?.take(200) ?: ""
+                ToolRouter.route(toolsInternal, userText)
+            } else {
+                toolsInternal
+            }
  
             // Check if we have tool calls ready to continue after user interaction.
             val pendingTools = messages.lastOrNull()?.getTools()?.filter {
@@ -214,7 +224,7 @@ class GenerationHandler(
                     model = model,
                     providerImpl = providerImpl,
                     provider = provider,
-                    tools = toolsInternal,
+                    tools = toolsForStep,
                     memories = memories ?: emptyList(),
                     stream = assistant.streamOutput,
                     processingStatus = processingStatus,
