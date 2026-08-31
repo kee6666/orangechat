@@ -586,6 +586,14 @@ class GenerationHandler(
                     appendLine("If you determine that no reply is needed (e.g., the user's message doesn't require a response, or you have nothing meaningful to add), you may reply with exactly `[SKIP]` (without any other text). This message will be hidden from the user. Use this sparingly and only when truly appropriate.")
                 }
 
+                // 工具路由提示：当可用工具被关键词过滤时，引导模型告知用户可补充
+                if (true) {
+                    appendLine()
+                    appendLine()
+                    appendLine("## 工具可用性提示")
+                    appendLine("本次对话根据用户消息关键词只注入了部分工具。如果你判断当前任务需要某个不在列表里的工具，直接告诉用户：'这个需要用到XXX工具，你说一声我就调用'，引导用户说出关键词后再尝试。")
+                }
+
                 // AI侧引用能力：AI可以用markdown引用语法引用用户之前说过的话
                 if (true) {
                     appendLine()
