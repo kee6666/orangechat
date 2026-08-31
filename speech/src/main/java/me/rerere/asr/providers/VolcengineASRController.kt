@@ -105,13 +105,20 @@ class VolcengineASRController(
             )
         }
 
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url(provider.websocketUrl)
-            .addHeader("X-Api-Key", provider.apiKey)
             .addHeader("X-Api-Resource-Id", provider.resourceId)
             .addHeader("X-Api-Request-Id", Uuid.random().toString())
             .addHeader("X-Api-Sequence", "-1")
-            .build()
+        if (provider.appId.isNotBlank()) {
+            // 旧版控制台鉴权: X-Api-App-Key(AppID) + X-Api-Access-Key(Access Token)
+            requestBuilder.addHeader("X-Api-App-Key", provider.appId)
+            requestBuilder.addHeader("X-Api-Access-Key", provider.apiKey)
+        } else {
+            // 新版控制台鉴权: X-Api-Key(API Key)
+            requestBuilder.addHeader("X-Api-Key", provider.apiKey)
+        }
+        val request = requestBuilder.build()
 
         webSocket = httpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {

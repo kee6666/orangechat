@@ -257,6 +257,18 @@ private fun VolcengineASRConfiguration(
     }
 
     FormItem(
+        label = { Text("APP ID") },
+        description = { Text("旧版控制台鉴权用的 APP ID（新版控制台留空，直接填 API Key 即可）") }
+    ) {
+        OutlinedTextField(
+            value = setting.appId,
+            onValueChange = { onValueChange(setting.copy(appId = it)) },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("your-app-id") }
+        )
+    }
+
+    FormItem(
         label = { Text(stringResource(R.string.setting_asr_configure_websocket_url)) },
         description = { Text(stringResource(R.string.setting_asr_configure_volcengine_websocket_desc)) }
     ) {
