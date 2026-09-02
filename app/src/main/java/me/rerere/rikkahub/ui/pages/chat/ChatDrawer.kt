@@ -453,6 +453,18 @@ fun ChatDrawerContent(
                     },
                 )
 
+                DrawerAction(
+                    icon = {
+                        Icon(HugeIcons.PencilEdit01, "每日任务")
+                    },
+                    label = {
+                        Text("每日任务")
+                    },
+                    onClick = {
+                        navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/tasks/"))
+                    },
+                )
+
                 Spacer(Modifier.weight(1f))
 
                 DrawerAction(
