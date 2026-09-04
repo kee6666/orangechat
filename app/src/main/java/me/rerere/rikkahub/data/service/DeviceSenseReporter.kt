@@ -37,6 +37,8 @@ object DeviceSenseReporter {
     private const val TAG = "DeviceSenseReporter"
     private const val SENSE_URL = "http://106.53.181.56:18002/sense"
     private const val EVENT_URL = "http://106.53.181.56:18002/event"
+    private const val OUTBOX_URL = "http://106.53.181.56:18002/outbox"
+    private const val STATUS_URL = "http://106.53.181.56:18002/status"
     private const val POLL_INTERVAL_MS = 30_000L
     private const val MIN_REPORT_INTERVAL_MS = 10_000L
     private const val MIN_EVENT_INTERVAL_MS = 60_000L // 本地节流：App变化/亮屏事件至少间隔60秒
@@ -106,6 +108,9 @@ object DeviceSenseReporter {
                         if (eventType != null && now - lastEventTs >= MIN_EVENT_INTERVAL_MS) {
                             lastEventTs = now
                             reportEvent(eventType, app, pkg)
+                            // 事件上报后（消息已生成进outbox）立刻取件，不依赖定时器链条
+                            delay(500L)
+                            takeOutboxIfNeeded(context)
                         }
                     }
                 } catch (e: Exception) {
@@ -162,6 +167,33 @@ object DeviceSenseReporter {
             conn.disconnect()
         } catch (e: Exception) {
             Log.w(TAG, "Event report error: ${e.message}")
+        }
+    }
+
+    /** 主动查看 VPS 是否有待发的消息（只查询不消耗），有就唤醒 TriggerService 去取件展示 */
+    private fun takeOutboxIfNeeded(context: Context) {
+        val pendingCount = try {
+            val conn = URL(STATUS_URL).openConnection() as HttpURLConnection
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            conn.requestMethod = "GET"
+            val text = conn.inputStream.bufferedReader().readText()
+            val o = org.json.JSONObject(text)
+            o.optInt("pending", 0)
+        } catch (e: Exception) {
+            Log.w(TAG, "outbox check failed: ${e.message}")
+            return
+        }
+        if (pendingCount == 0) return
+        Log.i(TAG, "outbox has $pendingCount pending msg(s), waking trigger")
+        val intent = android.content.Intent(context, me.rerere.rikkahub.data.service.ProactiveMessageTriggerService::class.java).apply {
+            action = me.rerere.rikkahub.data.service.ProactiveMessageService.ACTION_PROACTIVE_MESSAGE
+            putExtra(me.rerere.rikkahub.data.service.ProactiveMessageService.EXTRA_FORCE_TRIGGER, true)
+        }
+        try {
+            context.startForegroundService(intent)
+        } catch (_: Exception) {
+            context.startService(intent)
         }
     }
 
