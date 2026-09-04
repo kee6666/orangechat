@@ -36,12 +36,15 @@ import java.net.URL
 object DeviceSenseReporter {
     private const val TAG = "DeviceSenseReporter"
     private const val SENSE_URL = "http://106.53.181.56:18002/sense"
+    private const val EVENT_URL = "http://106.53.181.56:18002/event"
     private const val POLL_INTERVAL_MS = 30_000L
     private const val MIN_REPORT_INTERVAL_MS = 10_000L
+    private const val MIN_EVENT_INTERVAL_MS = 60_000L // 本地节流：App变化/亮屏事件至少间隔60秒
 
     private var lastScreen: String? = null
     private var lastPkg: String? = null
     private var lastReportTs = 0L
+    private var lastEventTs = 0L
 
     /**
      * 启动屏幕感知上报循环。由 RikkaHubApp.onCreate 调用。
@@ -87,10 +90,23 @@ object DeviceSenseReporter {
                     val changed = screen != lastScreen || pkg != lastPkg
 
                     if (changed && now - lastReportTs >= MIN_REPORT_INTERVAL_MS) {
+                        val prevScreen = lastScreen
+                        val prevPkg = lastPkg
                         lastScreen = screen
                         lastPkg = pkg
                         lastReportTs = now
                         report(screen, app, pkg)
+
+                        // 设备事件快速触发：亮屏(App不用) 或 前台App切换 → 通知VPS快速主动
+                        val eventType = when {
+                            screen == "on" && prevScreen == "off" -> "screen_on"
+                            screen == "on" && pkg.isNotEmpty() && pkg != prevPkg -> "app_change"
+                            else -> null
+                        }
+                        if (eventType != null && now - lastEventTs >= MIN_EVENT_INTERVAL_MS) {
+                            lastEventTs = now
+                            reportEvent(eventType, app, pkg)
+                        }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Sense poll error", e)
@@ -107,6 +123,45 @@ object DeviceSenseReporter {
             context.packageManager.getApplicationLabel(appInfo).toString()
         } catch (_: PackageManager.NameNotFoundException) {
             pkg
+        }
+    }
+
+    /**
+     * 设备事件快速触发：上报给VPS bridge /event，后者会立即生成主动消息进outbox。
+     */
+    private fun reportEvent(type: String, app: String, pkg: String) {
+        try {
+            val json = JSONObject().apply {
+                put("type", type)
+                put("app", app)
+                put("pkg", pkg)
+                put("screen", "on")
+            }
+
+            val url = URL(EVENT_URL)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connectTimeout = 5000
+                readTimeout = 5000
+                doOutput = true
+            }
+
+            OutputStreamWriter(conn.outputStream).use { writer ->
+                writer.write(json.toString())
+                writer.flush()
+            }
+
+            val code = conn.responseCode
+            if (code != 200) {
+                Log.w(TAG, "Event report failed: HTTP $code")
+            } else {
+                Log.i(TAG, "Event fired: $type app=$app")
+            }
+            conn.disconnect()
+        } catch (e: Exception) {
+            Log.w(TAG, "Event report error: ${e.message}")
         }
     }
 
