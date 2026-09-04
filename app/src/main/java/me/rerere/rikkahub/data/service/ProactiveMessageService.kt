@@ -565,6 +565,18 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                 // 非设备事件触发时，先看VPS身体有没有想对阿年说的话。
                 // 有 -> 直接展示(不走AI生成)；没有 -> 回落常规主动消息逻辑。
                 if (!isFromDeviceEvent) {
+                    // 插嘴冷却：距离用户最近一条消息太近（<2分钟），不取外部消息。
+                    // 刚聊完就冒主动消息会产生"割裂感"（她说"你这句跟我上句接不上"）。
+                    // 消息留在VPS outbox，等冷却过后下一次触发再取。
+                    val lastMsgMs = runCatching { proactiveMessageService.getLastMessageTimeMs() }.getOrDefault(0L)
+                    val sinceLastMsgSec = if (lastMsgMs > 0) (System.currentTimeMillis() - lastMsgMs) / 1000 else Long.MAX_VALUE
+                    val coolDownSec = 120L
+                    if (sinceLastMsgSec < coolDownSec) {
+                        Log.d(TAG, "L3 gateway: user just chatted ${sinceLastMsgSec}s ago, defer outbox delivery (cooldown ${coolDownSec}s)")
+                        ProactiveMessageService.scheduleNext(this@ProactiveMessageTriggerService, proactiveSetting)
+                        stopSelf()
+                        return@launch
+                    }
                     try {
                         val externalMsg = runCatching {
                             val url = java.net.URL("http://106.53.181.56:18002/outbox")
