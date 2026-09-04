@@ -188,7 +188,7 @@ object DeviceSenseReporter {
         Log.i(TAG, "outbox has $pendingCount pending msg(s), waking trigger")
         val intent = android.content.Intent(context, me.rerere.rikkahub.data.service.ProactiveMessageTriggerService::class.java).apply {
             action = me.rerere.rikkahub.data.service.ProactiveMessageService.ACTION_PROACTIVE_MESSAGE
-            putExtra(me.rerere.rikkahub.data.service.ProactiveMessageService.EXTRA_FORCE_TRIGGER, true)
+            putExtra(me.rerere.rikkahub.data.service.ProactiveMessageTriggerService.EXTRA_FORCE_TRIGGER, true)
         }
         try {
             context.startForegroundService(intent)
