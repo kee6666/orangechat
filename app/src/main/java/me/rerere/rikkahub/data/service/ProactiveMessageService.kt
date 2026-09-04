@@ -473,7 +473,8 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                 val proactiveSetting = settings.proactiveMessageSetting
 
                 // 激进模式设备事件触发时，不检查主动消息开关（可独立工作）
-                if (!proactiveSetting.enabled && !isFromDeviceEvent) {
+                // isForceTrigger（网关取件唤醒）同样放行：身体想说的话无条件送达，不被开关拦
+                if (!proactiveSetting.enabled && !isFromDeviceEvent && !isForceTrigger) {
                     stopSelf()
                     return@launch
                 }
