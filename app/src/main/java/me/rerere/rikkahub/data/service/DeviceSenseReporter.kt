@@ -137,8 +137,8 @@ object DeviceSenseReporter {
 
                 // 独立取件轮询：每60秒看一次VPS有没有身体想说的话。
                 // 有pending就唤醒TriggerService取件展示，彻底不受主动消息min/max间隔限制。
-                if (now - lastOutboxCheckTs >= 60_000L) {
-                    lastOutboxCheckTs = now
+                if (System.currentTimeMillis() - lastOutboxCheckTs >= 60_000L) {
+                    lastOutboxCheckTs = System.currentTimeMillis()
                     takeOutboxIfNeeded(context)
                 }
 
