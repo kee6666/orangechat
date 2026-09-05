@@ -41,12 +41,15 @@ object DeviceSenseReporter {
     private const val STATUS_URL = "http://106.53.181.56:18002/status"
     private const val POLL_INTERVAL_MS = 30_000L
     private const val MIN_REPORT_INTERVAL_MS = 10_000L
-    private const val MIN_EVENT_INTERVAL_MS = 60_000L // 本地节流：App变化/亮屏事件至少间隔60秒
+    private const val MIN_EVENT_INTERVAL_MS = 60_000L // 本地节流：事件至少间隔60秒
+    private const val APP_SETTLE_MIN_MS = 5 * 60_000L // 同一App持续停留满5分钟才可能触发app_change（快速切换不打扰）
 
     private var lastScreen: String? = null
     private var lastPkg: String? = null
     private var lastReportTs = 0L
     private var lastEventTs = 0L
+    private var fgStartTs = 0L      // 当前前台App开始时刻（用于停留计时）
+    private var lastEventPkg: String? = null  // 已为哪个App触发过app_change（停留期内不重复）
 
     /**
      * 启动屏幕感知上报循环。由 RikkaHubApp.onCreate 调用。
@@ -89,29 +92,43 @@ object DeviceSenseReporter {
                     }
 
                     val now = System.currentTimeMillis()
+                    // 前台停留计时：App一变化就重新计时
+                    if (pkg.isNotEmpty() && pkg != lastPkg) {
+                        fgStartTs = now
+                    }
+
                     val changed = screen != lastScreen || pkg != lastPkg
 
                     if (changed && now - lastReportTs >= MIN_REPORT_INTERVAL_MS) {
                         val prevScreen = lastScreen
-                        val prevPkg = lastPkg
                         lastScreen = screen
                         lastPkg = pkg
                         lastReportTs = now
                         report(screen, app, pkg)
 
-                        // 设备事件快速触发：亮屏(App不用) 或 前台App切换 → 通知VPS快速主动
-                        val eventType = when {
-                            screen == "on" && prevScreen == "off" -> "screen_on"
-                            screen == "on" && pkg.isNotEmpty() && pkg != prevPkg -> "app_change"
-                            else -> null
-                        }
-                        if (eventType != null && now - lastEventTs >= MIN_EVENT_INTERVAL_MS) {
+                        // 亮屏事件：她刚拿起手机，允许触发（内容由VPS侧中性化）
+                        if (screen == "on" && prevScreen == "off" &&
+                            now - lastEventTs >= MIN_EVENT_INTERVAL_MS
+                        ) {
                             lastEventTs = now
-                            reportEvent(eventType, app, pkg)
-                            // 事件上报后（消息已生成进outbox）立刻取件，不依赖定时器链条
-                            delay(500L)
-                            takeOutboxIfNeeded(context)
+                            reportEvent("screen_on", app, pkg)
                         }
+                    }
+
+                    // app_change 事件：同一App持续停留满阈值才触发，且停留期内只触发一次。
+                    // 快速切换（微信→抖音→小红书）不产生任何事件；她在某App里待住了，
+                    // 才说明可能有话可说——开口时机与"切换动作"彻底脱钩。
+                    if (screen == "on" && pkg.isNotEmpty() &&
+                        now - fgStartTs >= APP_SETTLE_MIN_MS &&
+                        pkg != lastEventPkg &&
+                        now - lastEventTs >= MIN_EVENT_INTERVAL_MS
+                    ) {
+                        lastEventTs = now
+                        lastEventPkg = pkg
+                        Log.i(TAG, "App settled ${APP_SETTLE_MIN_MS / 60000}min in $app, firing app_change (one-shot)")
+                        reportEvent("app_change", app, pkg)
+                        // 不再立刻取件：消息留在outbox，由ProactiveMessageService定时器
+                        // 按自然节奏取走展示，彻底不跟"切应用"绑在一起。
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Sense poll error", e)

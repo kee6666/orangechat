@@ -74,6 +74,7 @@ import androidx.compose.ui.util.fastForEach
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -193,6 +194,12 @@ private fun getToolIcon(toolName: String, action: String?) = when (toolName) {
 private fun JsonElement?.getStringContent(key: String): String? =
     this?.jsonObjectOrNull?.get(key)?.jsonPrimitiveOrNull?.contentOrNull
 
+/** 安全读取 JSON 数组：不是 JsonArray（或为 null）时返回空列表，绝不抛异常 */
+private fun JsonElement?.safeArray(): List<JsonElement> = when (this) {
+    is JsonArray -> this
+    else -> emptyList()
+}
+
 @Composable
 fun ChainOfThoughtScope.ChatMessageToolStep(
     tool: UIMessagePart.Tool,
@@ -264,8 +271,8 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
 
         ToolNames.ZIP_FILES, ToolNames.WRITE_FILES -> {
             val zipName = arguments.getStringContent("zip_name") ?: ""
-            val fileCount = arguments.jsonObject.get("files")?.jsonArray?.size ?: 0
-            val editCount = arguments.jsonObject.get("edits")?.jsonArray?.size ?: 0
+            val fileCount = arguments.jsonObject.get("files").safeArray().size
+            val editCount = arguments.jsonObject.get("edits").safeArray().size
             val isEdit = arguments.getStringContent("base_files") == "previous" && editCount > 0
             when {
                 isEdit && zipName.isNotBlank() -> "✏️ $zipName ($editCount edits)"
@@ -312,7 +319,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
             content.getStringContent("content") != null
 
         ToolNames.SEARCH_WEB -> content.getStringContent("answer") != null ||
-            (content?.jsonObject?.get("items")?.jsonArray?.isNotEmpty() == true)
+            (content?.jsonObject?.get("items").safeArray().isNotEmpty())
 
         ToolNames.SCRAPE_WEB -> arguments.getStringContent("url") != null
         ToolNames.TTS -> arguments.getStringContent("text") != null
@@ -418,7 +425,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        val items = content?.jsonObject?.get("items")?.jsonArray ?: emptyList()
+                        val items = content?.jsonObject?.get("items").safeArray()
                         if (items.isNotEmpty()) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -455,7 +462,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                         val context = LocalContext.current
                         val zipName = content.getStringContent("zip_name") ?: "files.zip"
                         val totalFiles = content.jsonObject.get("total_files")?.jsonPrimitive?.contentOrNull?.toIntOrNull()
-                            ?: content.jsonObject.get("files")?.jsonArray?.size ?: 0
+                            ?: content.jsonObject.get("files").safeArray().size
 
                         // 从工具执行结果中读取确切文件内容（不再猜数据源）
                         // write_files 工具现在在输出 JSON 中包含 files_content 字段
@@ -469,14 +476,14 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                                 }
                             } else {
                                 // 向后兼容: 如果工具结果中没有 files_content, 尝试从 arguments 提取 (full write 模式)
-                                arguments.jsonObject.get("files")?.jsonArray?.mapNotNull { fileElement ->
+                                arguments.jsonObject.get("files").safeArray().mapNotNull { fileElement ->
                                     runCatching {
                                         val obj = fileElement.jsonObject
                                         val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
                                         val fileContent = obj["content"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
                                         name to fileContent
                                     }.getOrNull()
-                                } ?: emptyList()
+                                }
                             }
                         }
 
@@ -733,7 +740,7 @@ private fun SearchWebPreview(
     content: JsonElement,
 ) {
     val context = LocalContext.current
-    val items = content.jsonObject["items"]?.jsonArray ?: emptyList()
+    val items = content.jsonObject["items"].safeArray()
     val answer = content.getStringContent("answer")
     val query = arguments.getStringContent("query") ?: ""
 
@@ -820,7 +827,7 @@ private fun SearchWebPreview(
 
 @Composable
 private fun ScrapeWebPreview(content: JsonElement) {
-    val urls = content.jsonObject["urls"]?.jsonArray ?: emptyList()
+    val urls = content.jsonObject["urls"].safeArray()
 
     LazyColumn(
         modifier = Modifier
@@ -968,12 +975,12 @@ private fun ChainOfThoughtScope.AskUserToolStep(
     // Parse questions from arguments
     val questions = remember(arguments) {
         runCatching {
-            arguments.jsonObject["questions"]?.jsonArray?.map { q ->
+            arguments.jsonObject["questions"].safeArray().map { q ->
                 val obj = q.jsonObject
                 AskUserQuestion(
                     id = obj["id"]?.jsonPrimitive?.contentOrNull ?: "",
                     question = obj["question"]?.jsonPrimitive?.contentOrNull ?: "",
-                    options = obj["options"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList(),
+                    options = obj["options"].safeArray().mapNotNull { it.jsonPrimitive.contentOrNull },
                     selectionType = obj["selection_type"]?.jsonPrimitive?.contentOrNull ?: "text"
                 )
             } ?: emptyList()
