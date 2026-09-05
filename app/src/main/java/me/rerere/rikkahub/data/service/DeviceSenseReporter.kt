@@ -50,6 +50,7 @@ object DeviceSenseReporter {
     private var lastEventTs = 0L
     private var fgStartTs = 0L      // 当前前台App开始时刻（用于停留计时）
     private var lastEventPkg: String? = null  // 已为哪个App触发过app_change（停留期内不重复）
+    private var lastOutboxCheckTs = 0L    // 独立取件轮询节流（每60秒查一次VPS outbox）
 
     /**
      * 启动屏幕感知上报循环。由 RikkaHubApp.onCreate 调用。
@@ -132,6 +133,13 @@ object DeviceSenseReporter {
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Sense poll error", e)
+                }
+
+                // 独立取件轮询：每60秒看一次VPS有没有身体想说的话。
+                // 有pending就唤醒TriggerService取件展示，彻底不受主动消息min/max间隔限制。
+                if (now - lastOutboxCheckTs >= 60_000L) {
+                    lastOutboxCheckTs = now
+                    takeOutboxIfNeeded(context)
                 }
 
                 delay(POLL_INTERVAL_MS)
