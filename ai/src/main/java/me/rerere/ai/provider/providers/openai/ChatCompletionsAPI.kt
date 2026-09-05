@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -588,7 +588,7 @@ class ChatCompletionsAPI(
     }
 
     private fun buildMessages(messages: List<UIMessage>, model: Model) = buildJsonArray {
-        val filteredMessages = messages.filter { it.isValidToUpload() }
+        val filteredMessages = filterProactiveNoise(messages).filter { it.isValidToUpload() }
         // 纯文本模型 (如 GLM-5.2) 不接受 image_url, 收到会报 "Model only support text input"。
         // OcrTransformer 只覆盖 file: 图片, http/base64 图片会漏网; 这里在序列化层兜底,
         // 模型不支持 IMAGE 时直接跳过 Image part, 不再发给 API。

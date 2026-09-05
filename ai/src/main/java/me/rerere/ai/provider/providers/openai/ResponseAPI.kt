@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -306,7 +306,7 @@ class ResponseAPI(
     }
 
     internal fun buildMessages(messages: List<UIMessage>) = buildJsonArray {
-        messages
+        filterProactiveNoise(messages)
             .filter { it.isValidToUpload() && it.role != MessageRole.SYSTEM }
             .forEach { message ->
                 if (message.role == MessageRole.ASSISTANT) {
