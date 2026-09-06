@@ -18,7 +18,6 @@
   <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
   <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -336,12 +335,18 @@
     </service>
 
     <!-- KeepAlive Service -->
+    <!-- 保活常驻服务：设计上需长期运行(24h)，dataSync 类型在 Android 15+ 有 6 小时超时会抛
+         ForegroundServiceDidNotStopInTimeException 导致崩溃，故改用 specialUse（无超时限制） -->
     <service
       android:name=".service.KeepAliveService"
       android:enabled="true"
       android:exported="false"
-      android:foregroundServiceType="dataSync"
-      android:stopWithTask="false" />
+      android:foregroundServiceType="specialUse"
+      android:stopWithTask="false">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="keep alive service for timed messages and proactive push (runs 24/7)" />
+    </service>
 
     <!-- 微信 Bot (iLink 协议): 长轮询收微信消息, 转给关联助手处理, 回复发回微信 -->
     <service
