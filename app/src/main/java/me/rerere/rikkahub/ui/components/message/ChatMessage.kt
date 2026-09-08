@@ -814,22 +814,14 @@ internal fun AudioPlayerBubble(url: String) {
     var currentMs by remember { mutableIntStateOf(0) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPrepared by remember { mutableStateOf(false) }
- 
-    // Generate pseudo-random waveform bar heights (deterministic per url)
-    val waveformBars = remember(url) {
-        val rnd = java.util.Random(url.hashCode().toLong())
-        List(40) { 0.15f + rnd.nextFloat() * 0.85f }
-    }
- 
-    val progress = if (durationMs > 0) currentMs.toFloat() / durationMs else 0f
- 
+
     DisposableEffect(Unit) {
         onDispose {
             mediaPlayer?.release()
             mediaPlayer = null
         }
     }
- 
+
     // Progress ticker
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
@@ -841,131 +833,85 @@ internal fun AudioPlayerBubble(url: String) {
             kotlinx.coroutines.delay(50)
         }
     }
- 
-    // Animate waveform bars when playing
-    val animatedBars = remember { mutableStateOf(waveformBars) }
-    LaunchedEffect(isPlaying, progress) {
-        if (isPlaying) {
-            val rnd = java.util.Random()
-            val newBars = waveformBars.mapIndexed { index, base ->
-                val playedRatio = if (progress > 0f) index.toFloat() / waveformBars.size else 0f
-                if (playedRatio <= progress) {
-                    // Already played bars stay at original height
-                    base
-                } else {
-                    // Upcoming bars get slight animation
-                    base * (0.85f + rnd.nextFloat() * 0.3f)
-                }
-            }
-            animatedBars.value = newBars
-        } else {
-            animatedBars.value = waveformBars
-        }
-    }
- 
-    val activeColor = MaterialTheme.colorScheme.primary
-    val inactiveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
- 
+
+    val bubbleColor = MaterialTheme.colorScheme.secondaryContainer
+    val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    val remainSec = if (durationMs > 0) ((durationMs - currentMs) / 1000).coerceAtLeast(0) else 0
+    val totalSec = durationMs / 1000
+
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.secondaryContainer)
-            .padding(start = 4.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Play / Pause button
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-                .clickable {
-                    if (isPlaying) {
-                        mediaPlayer?.pause()
-                        isPlaying = false
-                    } else {
-                        if (mediaPlayer == null || !isPrepared) {
-                            val mp = MediaPlayer()
-                            try {
-                                val uri = android.net.Uri.parse(url)
-                                mp.setDataSource(context, uri)
-                                mp.prepare()
-                                durationMs = mp.duration
-                                mp.setOnCompletionListener {
-                                    isPlaying = false
-                                    currentMs = 0
-                                }
-                                mp.start()
-                                isPlaying = true
-                                isPrepared = true
-                                mediaPlayer = mp
-                            } catch (e: Exception) {
-                                mp.release()
+            .background(bubbleColor)
+            .clickable {
+                if (isPlaying) {
+                    mediaPlayer?.pause()
+                    isPlaying = false
+                } else {
+                    if (mediaPlayer == null || !isPrepared) {
+                        val mp = MediaPlayer()
+                        try {
+                            val uri = android.net.Uri.parse(url)
+                            mp.setDataSource(context, uri)
+                            mp.prepare()
+                            durationMs = mp.duration
+                            mp.setOnCompletionListener {
+                                isPlaying = false
+                                currentMs = 0
                             }
-                        } else {
-                            mediaPlayer?.start()
+                            mp.start()
                             isPlaying = true
+                            isPrepared = true
+                            mediaPlayer = mp
+                        } catch (e: Exception) {
+                            mp.release()
                         }
+                    } else {
+                        mediaPlayer?.start()
+                        isPlaying = true
                     }
-                },
-            contentAlignment = Alignment.Center
-        ) {
+                }
+            }
+            .padding(start = 8.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        // 播放 / 暂停圆形按钮（阿年挑的图标）
+        Icon(
+            painter = painterResource(if (isPlaying) R.drawable.ic_voice_pause else R.drawable.ic_voice_play),
+            contentDescription = if (isPlaying) "暂停" else "播放",
+            tint = accentColor,
+            modifier = Modifier.size(34.dp)
+        )
+
+        // 中间：未播 = 小喇叭，播放中 = 动态音柱
+        if (isPlaying) {
+            VoiceWaveBars(
+                color = accentColor,
+                minBarHeight = 5.dp,
+                maxBarHeight = 20.dp,
+            )
+        } else {
             Icon(
-                imageVector = if (isPlaying) HugeIcons.PauseCircle else HugeIcons.PlayCircle,
-                contentDescription = if (isPlaying) "Pause" else "Play",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(22.dp)
+                painter = painterResource(R.drawable.ic_voice_speaker),
+                contentDescription = "语音",
+                tint = contentColor.copy(alpha = 0.7f),
+                modifier = Modifier.size(32.dp)
             )
         }
- 
-        Spacer(modifier = Modifier.width(8.dp))
- 
-        // Waveform bars
-        Canvas(
-            modifier = Modifier
-                .weight(1f)
-                .height(28.dp)
-                .clickable { /* click waveform to seek (optional future) */ }
-        ) {
-            val barCount = animatedBars.value.size
-            val totalWidth = size.width
-            val barWidth = 2.5f
-            val gap = (totalWidth - barWidth * barCount) / (barCount - 1).coerceAtLeast(1)
-            val playedBarCount = (progress * barCount).toInt()
- 
-            animatedBars.value.forEachIndexed { index, barRatio ->
-                val barHeight = size.height * barRatio.coerceIn(0.15f, 1f)
-                val x = index * (barWidth + gap)
-                val y = (size.height - barHeight) / 2f
-                drawRoundRect(
-                    color = if (index < playedBarCount) activeColor else inactiveColor,
-                    topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                    size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f, 1.5f)
-                )
-            }
-        }
- 
-        Spacer(modifier = Modifier.width(6.dp))
- 
-        // Duration text
-        val displaySec = if (isPlaying || currentMs > 0) {
-            val remaining = (durationMs - currentMs) / 1000
-            remaining.coerceAtLeast(0)
-        } else {
-            durationMs / 1000
-        }
+
+        // 秒数：未播 = 总时长，播放中 = 剩余
         Text(
-            text = String.format("%d:%02d", displaySec / 60, displaySec % 60),
+            text = if (isPlaying || currentMs > 0) "${remainSec}″" else "${totalSec}″",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = contentColor,
             fontSize = 13.sp,
-            modifier = Modifier.width(36.dp),
-            textAlign = TextAlign.End
         )
     }
 }
- 
+
 @Composable
 internal fun VoiceMessageBubble(
     voiceMessage: UIMessagePart.VoiceMessage,
@@ -974,16 +920,16 @@ internal fun VoiceMessageBubble(
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(false) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
- 
+
     val durationSec = (voiceMessage.duration / 1000).coerceAtLeast(1)
- 
+
     DisposableEffect(voiceMessage.url) {
         onDispose {
             mediaPlayer?.release()
             mediaPlayer = null
         }
     }
- 
+
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
             mediaPlayer?.let {
@@ -994,11 +940,17 @@ internal fun VoiceMessageBubble(
             kotlinx.coroutines.delay(50)
         }
     }
- 
+
+    val bubbleColor = if (isUser) MaterialTheme.colorScheme.secondaryContainer
+    else MaterialTheme.colorScheme.tertiaryContainer
+    val contentColor = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer
+    else MaterialTheme.colorScheme.onSecondaryContainer
+    val accentColor = if (isUser) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.primary
+
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = if (isUser) MaterialTheme.colorScheme.secondaryContainer
-        else MaterialTheme.colorScheme.tertiaryContainer,
+        color = bubbleColor,
         onClick = {
             if (isPlaying) {
                 mediaPlayer?.let {
@@ -1027,52 +979,43 @@ internal fun VoiceMessageBubble(
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                // 播放 / 暂停
                 Icon(
-                    imageVector = if (isPlaying) HugeIcons.PauseCircle else HugeIcons.PlayCircle,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+                    painter = painterResource(if (isPlaying) R.drawable.ic_voice_pause else R.drawable.ic_voice_play),
+                    contentDescription = if (isPlaying) "暂停" else "播放",
+                    tint = accentColor,
+                    modifier = Modifier.size(32.dp)
                 )
-                // Waveform bars
-                val waveformBars = remember(voiceMessage.url) {
-                    val rnd = java.util.Random(voiceMessage.url.hashCode().toLong())
-                    List(24) { 0.2f + rnd.nextFloat() * 0.8f }
-                }
-                val waveformColor = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
-                else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f)
-                Canvas(modifier = Modifier.width(60.dp).height(24.dp)) {
-                    val barCount = waveformBars.size
-                    val barWidth = 2.5f
-                    val gap = (size.width - barWidth * barCount) / (barCount - 1).coerceAtLeast(1)
-                    waveformBars.forEachIndexed { index, barRatio ->
-                        val barHeight = size.height * barRatio.coerceIn(0.2f, 1f)
-                        val x = index * (barWidth + gap)
-                        val y = (size.height - barHeight) / 2f
-                        drawRoundRect(
-                            color = waveformColor,
-                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                            size = Size(barWidth, barHeight),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f, 1.5f)
-                        )
-                    }
+                // 未播 = 小喇叭，播放中 = 动态音柱
+                if (isPlaying) {
+                    VoiceWaveBars(
+                        color = accentColor,
+                        minBarHeight = 5.dp,
+                        maxBarHeight = 20.dp,
+                    )
+                } else {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_voice_speaker),
+                        contentDescription = "语音",
+                        tint = contentColor.copy(alpha = 0.7f),
+                        modifier = Modifier.size(30.dp)
+                    )
                 }
                 Text(
                     text = "${durationSec}″",
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSecondaryContainer,
+                    color = contentColor,
+                    fontSize = 13.sp,
                 )
             }
-            // Show transcript text below the voice bubble (like WeChat)
+            // 转写文字（像微信语音条下面那行）
             if (voiceMessage.transcript.isNotBlank()) {
                 Text(
                     text = voiceMessage.transcript,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = contentColor.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 4.dp),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
@@ -1081,4 +1024,3 @@ internal fun VoiceMessageBubble(
         }
     }
 }
- 
