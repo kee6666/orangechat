@@ -886,19 +886,20 @@ internal fun AudioPlayerBubble(url: String) {
             modifier = Modifier.size(34.dp)
         )
 
-        // 中间：未播 = 小喇叭，播放中 = 动态音柱
+        // 中间：未播 = 三个从小到大音波(静态)，播放中 = 三根音波动起来
         if (isPlaying) {
             VoiceWaveBars(
+                barCount = 3,
                 color = accentColor,
-                minBarHeight = 5.dp,
-                maxBarHeight = 20.dp,
+                minBarHeight = 4.dp,
+                maxBarHeight = 16.dp,
             )
         } else {
             Icon(
-                painter = painterResource(R.drawable.ic_voice_speaker),
+                painter = painterResource(R.drawable.ic_voice_bars3),
                 contentDescription = "语音",
                 tint = contentColor.copy(alpha = 0.7f),
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(30.dp)
             )
         }
 

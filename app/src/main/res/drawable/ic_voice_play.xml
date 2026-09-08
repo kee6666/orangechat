@@ -4,14 +4,13 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <!-- 播放：浅灰圆盘 + 实心三角 -->
+    <!-- 播放：透空描边圆 + 实心三角（线稿，可tint跟随主题色） -->
     <path
         android:pathData="M24 4 a20 20 0 1 1 0 40 a20 20 0 1 1 0 -40 z"
-        android:fillColor="#F5F5F5" />
-    <path
-        android:pathData="M19 14 L35 24 L19 34 Z"
         android:strokeColor="#FF000000"
-        android:strokeWidth="2.5"
-        android:strokeLineJoin="round"
-        android:fillColor="#FF000000" />
+        android:strokeWidth="2.5" />
+    <path
+        android:pathData="M20 15 L34 24 L20 33 Z"
+        android:fillColor="#FF000000"
+        android:strokeLineJoin="round" />
 </vector>

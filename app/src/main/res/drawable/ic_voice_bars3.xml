@@ -4,19 +4,20 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <!-- 暂停：透空描边圆 + 两根圆角竖条（线稿，可tint跟随主题色） -->
+    <!-- 未播放：三个从小到大音波（线稿，可tint） -->
     <path
-        android:pathData="M24 4 a20 20 0 1 1 0 40 a20 20 0 1 1 0 -40 z"
+        android:pathData="M12 20 v8"
         android:strokeColor="#FF000000"
-        android:strokeWidth="2.5" />
-    <path
-        android:pathData="M20 17 v14"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="3.5"
+        android:strokeWidth="4"
         android:strokeLineCap="round" />
     <path
-        android:pathData="M28 17 v14"
+        android:pathData="M24 16 v16"
         android:strokeColor="#FF000000"
-        android:strokeWidth="3.5"
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M36 12 v24"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="4"
         android:strokeLineCap="round" />
 </vector>
