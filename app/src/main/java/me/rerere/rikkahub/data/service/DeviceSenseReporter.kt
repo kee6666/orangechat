@@ -228,6 +228,12 @@ object DeviceSenseReporter {
                 put("screen", screen)
                 put("app", app)
                 put("pkg", pkg)
+                // 屏幕内容感知开启时附带最近一次读到的屏幕文字（默认关，不开启为空）
+                if (ScreenContentReaderService.enabled) {
+                    put("screen_text", ScreenContentReaderService.lastSnapshot.take(200))
+                } else {
+                    put("screen_text", "")
+                }
             }
 
             val url = URL(SENSE_URL)
