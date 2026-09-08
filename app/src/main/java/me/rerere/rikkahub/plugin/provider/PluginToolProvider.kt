@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -9,6 +9,7 @@ package me.rerere.rikkahub.plugin.provider
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.InputSchema
@@ -133,7 +134,15 @@ class PluginToolProvider(
         return result.fold(
             onSuccess = { jsonElement ->
                 val resultStr = json.encodeToString(JsonElement.serializer(), jsonElement)
-                listOf(UIMessagePart.Text(resultStr))
+                val parts = mutableListOf<UIMessagePart>()
+                // 修复(fix18): TTS类插件结果不再被吞成纯文本。
+                // 检测返回JSON里携带音频URL时追加 UIMessagePart.Audio，
+                // 消息流因此出现"语音气泡"(ChatMessageTools按audio part渲染AudioPlayerBubble)。
+                extractAudioUrl(jsonElement)?.let { url ->
+                    parts += UIMessagePart.Audio(url = url)
+                }
+                parts += UIMessagePart.Text(resultStr)
+                parts
             },
             onFailure = { error ->
                 val errorObj = buildJsonObject {
@@ -143,6 +152,40 @@ class PluginToolProvider(
                 listOf(UIMessagePart.Text(errorObj.toString()))
             }
         )
+    }
+
+    /**
+     * 从插件返回的 JSON 结果中提取音频 URL。
+     * 命中任一条件即视为"这条工具结果是一条语音"：
+     *  - 顶层是对象，且 audio_url/audio/url/file_url 等字段指向音频文件(.mp3/.wav/.ogg/.m4a/.aac/.flac)
+     *  - 顶层就是字符串且指向音频文件
+     * 未命中返回 null —— 普通插件工具结果不受影响，仍按纯文本走。
+     */
+    private fun extractAudioUrl(element: JsonElement): String? {
+        val candidateKeys = listOf("audio_url", "audioUrl", "audio", "url", "file_url", "fileUrl")
+        when (element) {
+            is JsonObject -> {
+                val url = candidateKeys.firstNotNullOfOrNull { key ->
+                    val v = element[key] as? JsonPrimitive ?: return@firstNotNullOfOrNull null
+                    v.contentOrNull
+                }
+                return if (url != null && isAudioUrl(url)) url else null
+            }
+            is JsonPrimitive -> {
+                val url = element.contentOrNull ?: return null
+                return if (isAudioUrl(url)) url else null
+            }
+            else -> return null
+        }
+    }
+
+    private fun isAudioUrl(raw: String): Boolean {
+        val s = raw.trim()
+        if (!s.startsWith("http://") && !s.startsWith("https://")) return false
+        val path = s.substringBefore('?').lowercase()
+        return path.endsWith(".mp3") || path.endsWith(".wav") || path.endsWith(".ogg") ||
+            path.endsWith(".m4a") || path.endsWith(".aac") || path.endsWith(".flac") ||
+            path.endsWith(".opus")
     }
 
     /**
