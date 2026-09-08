@@ -167,12 +167,13 @@ class PluginToolProvider(
             is JsonObject -> {
                 val url = candidateKeys.firstNotNullOfOrNull { key ->
                     val v = element[key] as? JsonPrimitive ?: return@firstNotNullOfOrNull null
-                    v.contentOrNull
+                    val s = v.content
+                    if (isAudioUrl(s)) s else null
                 }
-                return if (url != null && isAudioUrl(url)) url else null
+                return url
             }
             is JsonPrimitive -> {
-                val url = element.contentOrNull ?: return null
+                val url = element.content
                 return if (isAudioUrl(url)) url else null
             }
             else -> return null
