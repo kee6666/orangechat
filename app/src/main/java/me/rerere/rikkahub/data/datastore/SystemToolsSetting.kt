@@ -89,6 +89,9 @@ data class SystemToolsSetting(
 
     // Fingerprint: verify_fingerprint 工具, 弹出系统指纹/人脸验证框验证用户身份
     val fingerprintEnabled: Boolean = false,
+
+    // Feature 23: Screen content perception (read screen text only)
+    val screenSenseEnabled: Boolean = false,
 ) {
     fun getEnabledOptions(): Set<me.rerere.rikkahub.data.ai.tools.SystemToolOption> {
         val options = mutableSetOf<me.rerere.rikkahub.data.ai.tools.SystemToolOption>()

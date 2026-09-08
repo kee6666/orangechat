@@ -1212,6 +1212,48 @@ fun SettingSystemToolsPage(vm: SettingVM = koinViewModel()) {
             }
 
 
+            // 屏幕内容感知（最小权限版）
+            item {
+            CardGroup(title = { Text("屏幕内容感知") }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                item(
+                    leadingContent = { Icon(imageVector = HugeIcons.SmartPhone01, contentDescription = null) },
+                    headlineContent = { Text("启用屏幕内容感知") },
+                    supportingContent = { Text("允许 AI 读取当前屏幕上可见的文字，了解你正在看什么。只读文本：不录屏、不截图、不模拟点击、不存储历史。默认关闭，需手动开启") },
+                    trailingContent = {
+                        Switch(
+                            checked = systemToolsSetting.screenSenseEnabled,
+                            onCheckedChange = { enabled ->
+                                updateSystemToolsSetting(systemToolsSetting.copy(screenSenseEnabled = enabled))
+                                me.rerere.rikkahub.data.service.ScreenContentReaderService.enabled = enabled
+                            }
+                        )
+                    }
+                )
+                if (systemToolsSetting.screenSenseEnabled &&
+                    !me.rerere.rikkahub.data.service.ScreenContentReaderService.isEnabledInSettings(context)
+                ) {
+                    item(
+                        headlineContent = { Text("⚠ 无障碍服务未启用") },
+                        supportingContent = { Text("屏幕内容感知依赖无障碍服务读取屏幕文字。请在系统设置中单独开启「屏幕内容感知」服务（与 App 锁定共用橘瓣无障碍入口，需在列表中找到并打开）") },
+                        trailingContent = {
+                            FilledTonalButton(onClick = {
+                                me.rerere.rikkahub.data.service.ScreenContentReaderService.openAccessibilitySettings(context)
+                            }) { Text("去设置") }
+                        }
+                    )
+                }
+                if (systemToolsSetting.screenSenseEnabled &&
+                    me.rerere.rikkahub.data.service.ScreenContentReaderService.isEnabledInSettings(context)
+                ) {
+                    item(
+                        headlineContent = { Text("当前读取到的内容") },
+                        supportingContent = { Text(me.rerere.rikkahub.data.service.ScreenContentReaderService.lastSnapshot.ifBlank { "（还没有内容——切换到其他 App 后回来查看）" }) }
+                    )
+                }
+            }
+            }
+
+
         }
 
         PermissionManager(permissionState = locationPermissionState)

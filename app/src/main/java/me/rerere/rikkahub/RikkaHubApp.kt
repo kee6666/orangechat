@@ -130,6 +130,9 @@ class RikkaHubApp : Application() {
         // Start App Lock guard (intercepts locked apps when opened) if any app is locked
         startAppLockGuardIfEnabled()
 
+        // Restore screen content reader enabled state from settings
+        startScreenSenseIfEnabled()
+
         // Start aggressive mode (device event AI trigger) if enabled
         startAggressiveModeIfEnabled()
 
@@ -291,6 +294,20 @@ class RikkaHubApp : Application() {
             me.rerere.rikkahub.data.service.AppLockGuard.init(this)
         }.onFailure {
             Log.e(TAG, "startAppLockGuardIfEnabled failed", it)
+        }
+    }
+
+    private fun startScreenSenseIfEnabled() {
+        get<AppScope>().launch {
+            runCatching {
+                val setting = get<SettingsStore>().settingsFlowRaw.first().systemToolsSetting
+                if (setting.screenSenseEnabled) {
+                    me.rerere.rikkahub.data.service.ScreenContentReaderService.enabled = true
+                    Log.i(TAG, "ScreenContentReaderService enabled from settings")
+                }
+            }.onFailure {
+                Log.e(TAG, "startScreenSenseIfEnabled failed", it)
+            }
         }
     }
 

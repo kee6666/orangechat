@@ -314,6 +314,20 @@
         android:resource="@xml/accessibility_service_config" />
     </service>
 
+    <!-- Screen content reader: minimal-read accessibility service (content perception) -->
+    <service
+      android:name=".data.service.ScreenContentReaderService"
+      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+      android:exported="false"
+      android:label="Screen Content Reader">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+      </intent-filter>
+      <meta-data
+        android:name="android.accessibilityservice"
+        android:resource="@xml/screen_sense_accessibility_config" />
+    </service>
+
     <!-- Pomodoro Timer Service -->
     <service
       android:name=".plugin.webview.PomodoroTimerService"
