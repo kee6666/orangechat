@@ -465,6 +465,18 @@ fun ChatDrawerContent(
                     },
                 )
 
+                DrawerAction(
+                    icon = {
+                        Icon(HugeIcons.Earth, "拾光·记忆")
+                    },
+                    label = {
+                        Text("拾光·记忆")
+                    },
+                    onClick = {
+                        navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/shiguang/"))
+                    },
+                )
+
                 Spacer(Modifier.weight(1f))
 
                 DrawerAction(
