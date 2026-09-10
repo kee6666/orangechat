@@ -467,7 +467,7 @@ fun ChatDrawerContent(
 
                 DrawerAction(
                     icon = {
-                        Icon(HugeIcons.Earth, "拾光·记忆")
+                        Icon(HugeIcons.Sparkles, "拾光·记忆")
                     },
                     label = {
                         Text("拾光·记忆")
