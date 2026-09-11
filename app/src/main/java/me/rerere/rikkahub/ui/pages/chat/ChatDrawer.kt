@@ -9,6 +9,8 @@ package me.rerere.rikkahub.ui.pages.chat
 import androidx.activity.ComponentActivity
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -348,10 +350,11 @@ fun ChatDrawerContent(
             )
 
             Row(
-                horizontalArrangement = Arrangement.SpaceAround,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 8.dp)
                     .alpha(settings.displaySetting.drawerItemAlpha)
             ) {
@@ -476,8 +479,6 @@ fun ChatDrawerContent(
                         navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/shiguang/"))
                     },
                 )
-
-                Spacer(Modifier.weight(1f))
 
                 DrawerAction(
                     icon = {
