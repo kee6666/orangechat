@@ -188,6 +188,7 @@ class SettingsStore(
         val WORKFLOW_HEADLESS_BLOCK_SENSITIVE = booleanPreferencesKey("workflow_headless_block_sensitive")
 
         // 自动批准所有工具调用（懒人模式）
+        val TOOL_FILTER_ENABLED = "tool_filter_enabled"
         val AUTO_APPROVE_ALL_TOOLS = booleanPreferencesKey("auto_approve_all_tools")
     }
 
@@ -309,6 +310,7 @@ class SettingsStore(
                 forceConfirmToolCalls = preferences[FORCE_CONFIRM_TOOL_CALLS] != false,
                 workflowHeadlessBlockSensitive = preferences[WORKFLOW_HEADLESS_BLOCK_SENSITIVE] != false,
                 autoApproveAllTools = preferences[AUTO_APPROVE_ALL_TOOLS] == true,
+                toolFilterEnabled = preferences[TOOL_FILTER_ENABLED] != false,
             )
         }
         .map {
@@ -490,6 +492,7 @@ class SettingsStore(
             preferences[FORCE_CONFIRM_TOOL_CALLS] = settings.forceConfirmToolCalls
             preferences[WORKFLOW_HEADLESS_BLOCK_SENSITIVE] = settings.workflowHeadlessBlockSensitive
             preferences[AUTO_APPROVE_ALL_TOOLS] = settings.autoApproveAllTools
+            preferences[TOOL_FILTER_ENABLED] = settings.toolFilterEnabled != false
         }
     }
 
@@ -630,6 +633,7 @@ data class Settings(
     val forceConfirmToolCalls: Boolean = true,
     val workflowHeadlessBlockSensitive: Boolean = true,
     val autoApproveAllTools: Boolean = false,
+    val toolFilterEnabled: Boolean = true,
 ) {
     companion object {
         // 构造一个用于初始化的settings, 但它不能用于保存，防止使用初始值存储

@@ -179,12 +179,8 @@ class GenerationHandler(
 
             // 工具路由：仅在新回合（最后一条消息是用户消息）按关键词过滤工具，
             // 工具循环中（最后是 assistant 的 tool call/result）不过滤，避免打断连续调用。
-            val toolsForStep = if (messages.lastOrNull()?.role == MessageRole.USER) {
-                val userText = messages.lastOrNull()?.toText()?.take(200) ?: ""
-                ToolRouter.route(toolsInternal, userText)
-            } else {
-                toolsInternal
-            }
+            // 全量注入：不过滤工具，模型始终可见所有能力（阿年 2026-09-11 要求）
+            val toolsForStep = toolsInternal
  
             // Check if we have tool calls ready to continue after user interaction.
             val pendingTools = messages.lastOrNull()?.getTools()?.filter {
