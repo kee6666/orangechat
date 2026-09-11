@@ -58,6 +58,7 @@ import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.LeftToRightListBullet
 import me.rerere.hugeicons.stroke.Menu03
 import me.rerere.hugeicons.stroke.MessageAdd01
+import me.rerere.hugeicons.stroke.InLove
 import me.rerere.hugeicons.stroke.Voice
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
@@ -274,6 +275,9 @@ private fun ChatPageContent(
         Scaffold(
             topBar = {
                 TopBar(
+                    onOpenBoard = {
+                        navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/board/"))
+                    },
                     settings = setting,
                     conversation = conversation,
                     bigScreen = bigScreen,
@@ -497,6 +501,7 @@ private fun TopBar(
     onNewChat: () -> Unit,
     onUpdateTitle: (String) -> Unit,
     onVoiceCall: () -> Unit,
+    onOpenBoard: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
@@ -554,6 +559,14 @@ private fun TopBar(
             }
         },
         actions = {
+            IconButton(
+                onClick = {
+                    onOpenBoard()
+                }
+            ) {
+                Icon(HugeIcons.InLove, "Today Board")
+            }
+
             IconButton(
                 onClick = {
                     onVoiceCall()
