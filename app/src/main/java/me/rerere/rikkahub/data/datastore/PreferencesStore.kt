@@ -188,7 +188,7 @@ class SettingsStore(
         val WORKFLOW_HEADLESS_BLOCK_SENSITIVE = booleanPreferencesKey("workflow_headless_block_sensitive")
 
         // 自动批准所有工具调用（懒人模式）
-        val TOOL_FILTER_ENABLED = "tool_filter_enabled"
+        val TOOL_FILTER_ENABLED = booleanPreferencesKey("tool_filter_enabled")
         val AUTO_APPROVE_ALL_TOOLS = booleanPreferencesKey("auto_approve_all_tools")
     }
 
