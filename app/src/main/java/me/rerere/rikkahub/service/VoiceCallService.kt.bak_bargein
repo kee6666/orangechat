@@ -675,28 +675,12 @@ class VoiceCallService : Service(), KoinComponent {
 
     /**
      * 用户打断 AI 说话 (Barge-in).
-     *
-     * 借鉴 erpan (qfyingque/erpan) 的 speechStarted 语义: 用户一开口,
-     * 立刻把 AI "闭嘴 + 停脑" 一起掐掉, 而不是只停 TTS 而后台还在闷头生成.
-     *
-     * 三层:
-     *   1. cancel 掉正在跑的 monitor 协程
-     *   2. 取消 chatService 正在跑的 streamText 生成 (stopGeneration),
-     *      这样 AI 不会在你插嘴后还继续往对话里写、继续往 TTS 塞句子
-     *   3. tts.stop() + 切回 Listening
-     *
-     * stopGeneration 是 suspend, 用 fire-and-forget 方式在 serviceScope 里调,
-     * 不阻塞打断本身.
+     * 不再调用 asr.start() (ASR 一直是开着的), 只做状态切换 + cancel 协程.
      */
     fun interruptSpeaking() {
         if (_uiState.value.status != VoiceCallStatus.Speaking) return
         speakingMonitorJob?.cancel()
         interruptDetectJob?.cancel()
-        // 关键: 取消后台 AI 生成 (erpan 的 active?.cancel() 语义)
-        serviceScope.launch {
-            runCatching { chatService.stopGeneration(conversationId) }
-                .onFailure { Log.w(TAG, "stopGeneration on barge-in failed", it) }
-        }
         startListening()
     }
 
