@@ -585,6 +585,22 @@ class ChatService(
             updateConversation(conversationId, updated)
             saveConversation(conversationId, updated)
         }
+
+        // 收到VPS主动推送的消息，若App不在前台则弹系统通知，提醒阿年来看
+        if (!isForeground.value) {
+            val text = aiMessage.toText()?.take(40)?.trim() ?: ""
+            context.sendNotification(
+                channelId = CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID,
+                notificationId = conversationId.hashCode() + 9000
+            ) {
+                title = "先生主动给你留了言"
+                content = text
+                autoCancel = true
+                useDefaults = true
+                category = NotificationCompat.CATEGORY_MESSAGE
+                contentIntent = getPendingIntent(context, conversationId)
+            }
+        }
     }
 
     // ---- 语音通话被拒接通知 ----
