@@ -1125,6 +1125,7 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data class VoiceCall(val conversationId: String) : Screen
+    @Serializable
     data class VideoCall(val conversationId: String) : Screen
 
     /**

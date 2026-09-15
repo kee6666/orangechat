@@ -98,7 +98,7 @@ class VideoCallService(private val conversationId: String) {
         // 模拟连接延迟
         Thread.sleep(1000)
         
-        callSessionId = UUID.randomUUID().toString()
+        callSessionId = Uuid.random().toString()
         _uiState.value = VideoCallUiState(
             status = VideoCallStatus.Connected,
             isCameraOn = true,
@@ -118,6 +118,13 @@ class VideoCallService(private val conversationId: String) {
         _uiState.value = VideoCallUiState(status = VideoCallStatus.Idle)
         callSessionId = null
     }
+
+    fun setError(message: String) {
+        _uiState.value = VideoCallUiState(
+            status = VideoCallStatus.Error,
+            errorMessage = message
+        )
+    }
 }
 
 @Composable
@@ -134,19 +141,15 @@ fun VideoCallPage(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (!granted) {
-            state._uiState.value = VideoCallUiState(
-                status = VideoCallStatus.Error,
-                errorMessage = "摄像头权限被拒绝"
-            )
+            state.setError("摄像头权限被拒绝")
         }
     }
     
     DisposableEffect(conversationId) {
         state.start()
-        onBack {
+        onDispose {
             state.hangup()
         }
-        return@DisposableEffect {}
     }
     
     // 请求摄像头权限
