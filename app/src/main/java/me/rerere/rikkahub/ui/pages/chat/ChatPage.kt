@@ -74,6 +74,7 @@ import me.rerere.rikkahub.service.VoiceCallService
 import me.rerere.rikkahub.ui.components.ai.ChatInput
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
+import me.rerere.rikkahub.ui.pages.voice.VideoCallPage
 import me.rerere.rikkahub.ui.context.Navigator
 import me.rerere.rikkahub.ui.hooks.ChatInputState
 import me.rerere.rikkahub.ui.hooks.EditStateContent
@@ -290,7 +291,19 @@ private fun ChatPageContent(
                         previewMode = !previewMode
                     },
                     onUpdateTitle = {
-                        vm.updateTitle(it)
+                        onUpdateTitle(it)
+                    },
+                    onVideoCall = {
+                        val activeId = VoiceCallService.activeConversationId.value
+                        when {
+                            activeId == null -> navController.navigate(
+                                Screen.VideoCall(conversation.id.toString())
+                            )
+                            activeId == conversation.id.toString() -> {}
+                            else -> {
+                                toaster.show("当前有语音通话进行中，请先挂断", type = ToastType.Warning)
+                            }
+                        }
                     },
                     onVoiceCall = {
                         val activeId = VoiceCallService.activeConversationId.value
@@ -502,6 +515,7 @@ private fun TopBar(
     onUpdateTitle: (String) -> Unit,
     onVoiceCall: () -> Unit,
     onOpenBoard: () -> Unit,
+    onVideoCall: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
@@ -573,6 +587,13 @@ private fun TopBar(
                 }
             ) {
                 Icon(HugeIcons.Voice, "Voice Call")
+            }
+            IconButton(
+                onClick = {
+                    // TODO: 视频通话功能待实现
+                }
+            ) {
+                Icon(HugeIcons.Video01, "Video Call")
             }
 
             IconButton(

@@ -765,6 +765,13 @@ class VoiceCallService : Service(), KoinComponent {
      * 切换自动发送模式. UI 上不再挂载按钮, 但保留方法 (autoSendEnabled 字段仍在用).
      */
     fun toggleAutoSend() {
+    /**
+     * 切换摄像头开关
+     */
+    fun toggleCamera(on: Boolean) {
+        _uiState.update { it.copy(isCameraOn = on) }
+    }
+
         _uiState.update { it.copy(autoSendEnabled = !it.autoSendEnabled) }
     }
 

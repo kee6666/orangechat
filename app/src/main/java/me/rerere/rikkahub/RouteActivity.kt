@@ -171,6 +171,7 @@ import me.rerere.rikkahub.ui.pages.stats.StatsPage
 import me.rerere.rikkahub.ui.pages.translator.TranslatorPage
  import me.rerere.rikkahub.ui.pages.voice.IncomingCallPage
  import me.rerere.rikkahub.ui.pages.voice.VoiceCallPage
+ import me.rerere.rikkahub.ui.pages.voice.VideoCallPage
 import me.rerere.rikkahub.service.VoiceCallService
 import me.rerere.rikkahub.ui.pages.webview.WebViewPage
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
@@ -789,6 +790,13 @@ entry<Screen.Extensions> {
                             }
 
                             entry<Screen.VoiceCall> { key ->
+                            entry<Screen.VideoCall> { key ->
+                                VideoCallPage(
+                                    conversationId = Uuid.parse(key.conversationId),
+                                    onBack = { backStack.removeLastOrNull() }
+                                )
+                            }
+
                                 VoiceCallPage(
                                     conversationId = Uuid.parse(key.conversationId),
                                     onBack = { backStack.removeLastOrNull() }
@@ -1117,6 +1125,7 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data class VoiceCall(val conversationId: String) : Screen
+    data class VideoCall(val conversationId: String) : Screen
 
     /**
      * AI 主动发起语音通话时弹出的来电界面.
