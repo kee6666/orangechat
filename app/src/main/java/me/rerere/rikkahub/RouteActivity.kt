@@ -789,7 +789,6 @@ entry<Screen.Extensions> {
                                 )
                             }
 
-                            entry<Screen.VoiceCall> { key ->
                             entry<Screen.VideoCall> { key ->
                                 VideoCallPage(
                                     conversationId = Uuid.parse(key.conversationId),
@@ -797,6 +796,7 @@ entry<Screen.Extensions> {
                                 )
                             }
 
+                            entry<Screen.VoiceCall> { key ->
                                 VoiceCallPage(
                                     conversationId = Uuid.parse(key.conversationId),
                                     onBack = { backStack.removeLastOrNull() }
