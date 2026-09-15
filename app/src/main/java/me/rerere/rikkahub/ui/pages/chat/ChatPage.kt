@@ -283,6 +283,7 @@ private fun ChatPageContent(
                     conversation = conversation,
                     bigScreen = bigScreen,
                     drawerState = drawerState,
+                    onVideoCall = onVideoCall,
                     previewMode = previewMode,
                     onNewChat = {
                         navigateToChatPage(navController)
@@ -590,7 +591,7 @@ private fun TopBar(
             }
             IconButton(
                 onClick = {
-                    // TODO: 视频通话功能待实现
+                    onVideoCall()
                 }
             ) {
                 Icon(HugeIcons.Video01, "Video Call")
