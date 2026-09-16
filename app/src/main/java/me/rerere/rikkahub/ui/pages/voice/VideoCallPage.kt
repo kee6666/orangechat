@@ -293,7 +293,7 @@ fun VideoCallPage(
                     
                     // 切换摄像头
                     ControlButton(
-                        icon = Video01,
+                        icon = HugeIcons.Video01,
                         contentDescription = "切换摄像头",
                         onClick = { state.toggleCamera() },
                         backgroundColor = Color.White.copy(alpha = 0.15f),

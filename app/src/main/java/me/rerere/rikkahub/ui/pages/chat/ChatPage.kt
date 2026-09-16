@@ -594,7 +594,7 @@ private fun TopBar(
                     onVideoCall()
                 }
             ) {
-                Icon(Video01, "Video Call")
+                Icon(HugeIcons.Video01, "Video Call")
             }
 
             IconButton(
