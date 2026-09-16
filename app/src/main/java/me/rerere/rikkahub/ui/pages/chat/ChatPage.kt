@@ -59,6 +59,7 @@ import me.rerere.hugeicons.stroke.LeftToRightListBullet
 import me.rerere.hugeicons.stroke.Menu03
 import me.rerere.hugeicons.stroke.MessageAdd01
 import me.rerere.hugeicons.stroke.InLove
+import me.rerere.hugeicons.stroke.Video01
 import me.rerere.hugeicons.stroke.Voice
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
@@ -291,7 +292,7 @@ private fun ChatPageContent(
                         previewMode = !previewMode
                     },
                     onUpdateTitle = {
-                        onUpdateTitle(it)
+                        vm.updateTitle(it)
                     },
                     onVideoCall = {
                         val activeId = VoiceCallService.activeConversationId.value
@@ -593,7 +594,7 @@ private fun TopBar(
                     onVideoCall()
                 }
             ) {
-                Icon(HugeIcons.Video01, "Video Call")
+                Icon(Video01, "Video Call")
             }
 
             IconButton(

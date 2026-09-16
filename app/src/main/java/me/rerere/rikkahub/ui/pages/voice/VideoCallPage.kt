@@ -161,7 +161,7 @@ fun VideoCallPage(
         ) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
-        return@DisposableEffect {}
+        onDispose {}
     }
     
     Box(
@@ -293,7 +293,7 @@ fun VideoCallPage(
                     
                     // 切换摄像头
                     ControlButton(
-                        icon = HugeIcons.Video01,
+                        icon = Video01,
                         contentDescription = "切换摄像头",
                         onClick = { state.toggleCamera() },
                         backgroundColor = Color.White.copy(alpha = 0.15f),
