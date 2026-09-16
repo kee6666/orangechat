@@ -59,6 +59,7 @@ import me.rerere.hugeicons.stroke.LeftToRightListBullet
 import me.rerere.hugeicons.stroke.Menu03
 import me.rerere.hugeicons.stroke.MessageAdd01
 import me.rerere.hugeicons.stroke.InLove
+import me.rerere.hugeicons.stroke.HeartPulse
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.hugeicons.stroke.Voice
 import me.rerere.rikkahub.R
@@ -279,6 +280,9 @@ private fun ChatPageContent(
                 TopBar(
                     onOpenBoard = {
                         navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/board/"))
+                    },
+                    onOpenHeart = {
+                        navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/heart/"))
                     },
                     settings = setting,
                     conversation = conversation,
@@ -516,6 +520,7 @@ private fun TopBar(
     onUpdateTitle: (String) -> Unit,
     onVoiceCall: () -> Unit,
     onOpenBoard: () -> Unit,
+    onOpenHeart: () -> Unit,
     onVideoCall: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -580,6 +585,14 @@ private fun TopBar(
                 }
             ) {
                 Icon(HugeIcons.InLove, "Today Board")
+            }
+
+            IconButton(
+                onClick = {
+                    onOpenHeart()
+                }
+            ) {
+                Icon(HugeIcons.HeartPulse, "Heart Tide")
             }
 
             IconButton(
