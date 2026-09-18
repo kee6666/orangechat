@@ -157,8 +157,8 @@ class IslandService : Service() {
                     val f = a.animatedValue as Float
                     l.width = (startW + (targetW - startW) * f).toInt()
                     l.height = (startH + (targetH - startH) * f).toInt()
-                    l.y = dp(12) + dp(26) * (1 - f)
-                    v.background = pillBg(dp(16 - 6 * f).toFloat())
+                    l.y = (dp(12) + dp(26) * (1 - f)).toInt()
+                    v.background = pillBg(dp(16) - dp(6) * f)
                     v.alpha = min(1f, 0.3f + f)
                     titleText?.alpha = f
                     bodyText?.alpha = f
@@ -188,7 +188,7 @@ class IslandService : Service() {
                 val f = a.animatedValue as Float
                 l.width = (startW + (pillW - startW) * f).toInt()
                 l.height = (startH + (pillH - startH) * f).toInt()
-                l.y = dp(12) + dp(26) * f
+                l.y = (dp(12) + dp(26) * f).toInt()
                 v.background = pillBg(startBg + dp(6) * f)
                 titleText?.alpha = 1f - f
                 bodyText?.alpha = 1f - f
