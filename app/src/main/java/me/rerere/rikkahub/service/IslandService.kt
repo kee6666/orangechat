@@ -131,7 +131,7 @@ class IslandService : Service() {
                             } catch (_: Exception) {}
                             hideCompletely(); true
                         } else if (!expanded && kotlin.math.abs(ev.rawY - downY) < dp(12)) {
-                            pending?.let { showInternal(it, null) }; true
+                            expandFromPill(); true
                         } else expanded
                     }
                     else -> expanded
@@ -156,41 +156,51 @@ class IslandService : Service() {
         val h = handler ?: return
         if (conversationId != null) tapConversation = conversationId
         h.removeCallbacksAndMessages(null)
+        pending = message
         if (!expanded) {
-            pending = message
+            // 药丸先行：先以长条椭圆站2秒，再展开显示全文（点药丸可立即展开）
             ensureView()
             val v = view ?: return
-            val l = lp ?: return
-            expanded = true
             v.animate().cancel()
-            val startW = l.width
-            val startH = l.height
-            val targetW = min(dp(320), resources.displayMetrics.widthPixels - dp(28))
-            val targetH = dp(92)
-            bodyText?.text = message
-            ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 340
-                interpolator = OvershootInterpolator(0.85f)
-                addUpdateListener { a ->
-                    val f = a.animatedValue as Float
-                    l.width = (startW + (targetW - startW) * f).toInt()
-                    l.height = (startH + (targetH - startH) * f).toInt()
-                    l.y = (dp(12) + dp(26) * (1 - f)).toInt()
-                    v.background = pillBg(dp(16) - dp(6) * f)
-                    v.alpha = min(1f, 0.3f + f)
-                    titleText?.alpha = f
-                    bodyText?.alpha = f
-                    try { wm?.updateViewLayout(v, l) } catch (_: Exception) {}
-                }
-                start()
-            }
-            h.postDelayed({ collapseToPill() }, 4200)
+            v.animate().alpha(1f).setDuration(180).start()
+            titleText?.alpha = 0.85f
+            bodyText?.alpha = 0f
+            h.postDelayed({ expandFromPill() }, 2000)
         } else {
             // 已展开：只换文案，重计时
             bodyText?.text = message
-            pending = message
             h.postDelayed({ collapseToPill() }, 4200)
         }
+    }
+
+    private fun expandFromPill() {
+        val v = view ?: return
+        val l = lp ?: return
+        if (expanded) return
+        expanded = true
+        v.animate().cancel()
+        val startW = l.width
+        val startH = l.height
+        val targetW = min(dp(320), resources.displayMetrics.widthPixels - dp(28))
+        val targetH = dp(92)
+        bodyText?.text = pending
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 340
+            interpolator = OvershootInterpolator(0.85f)
+            addUpdateListener { a ->
+                val f = a.animatedValue as Float
+                l.width = (startW + (targetW - startW) * f).toInt()
+                l.height = (startH + (targetH - startH) * f).toInt()
+                l.y = (dp(12) + dp(26) * (1 - f)).toInt()
+                v.background = pillBg(dp(16) + dp(8) * f)
+                v.alpha = min(1f, 0.3f + f)
+                titleText?.alpha = 1f
+                bodyText?.alpha = f
+                try { wm?.updateViewLayout(v, l) } catch (_: Exception) {}
+            }
+            start()
+        }
+        handler?.postDelayed({ collapseToPill() }, 4200)
     }
 
     private fun collapseToPill() {
@@ -199,7 +209,7 @@ class IslandService : Service() {
         expanded = false
         val startW = l.width
         val startH = l.height
-        val startBg = dp(10).toFloat()
+        val startBg = dp(24).toFloat()
         ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 300
             addUpdateListener { a ->
@@ -207,7 +217,7 @@ class IslandService : Service() {
                 l.width = (startW + (pillW - startW) * f).toInt()
                 l.height = (startH + (pillH - startH) * f).toInt()
                 l.y = (dp(12) + dp(26) * f).toInt()
-                v.background = pillBg(startBg + dp(6) * f)
+                v.background = pillBg(startBg - dp(8) * f)
                 titleText?.alpha = 1f - f
                 bodyText?.alpha = 1f - f
                 try { wm?.updateViewLayout(v, l) } catch (_: Exception) {}
