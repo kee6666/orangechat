@@ -591,7 +591,7 @@ class ChatService(
         var islandShown = false
         try {
             aiMessage.toText()?.trim()?.takeIf { it.isNotEmpty() }?.let { txt ->
-                islandShown = IslandService.show(context, txt)
+                islandShown = IslandService.show(context, txt, conversationId.toString())
             }
         } catch (e: Exception) {
             Log.w(TAG, "island show failed", e)

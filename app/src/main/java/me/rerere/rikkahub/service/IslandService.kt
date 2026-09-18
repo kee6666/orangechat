@@ -25,6 +25,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.view.View
 import kotlin.math.min
+import me.rerere.rikkahub.RouteActivity
 
 /**
  * 灵动岛：先生的主动消息从屏幕顶部落下的黑色药丸。
@@ -52,7 +53,7 @@ class IslandService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val msg = intent?.getStringExtra(EXTRA_MESSAGE)
-        if (!msg.isNullOrBlank()) showInternal(msg)
+        if (!msg.isNullOrBlank()) showInternal(msg, intent?.getStringExtra(EXTRA_CONVERSATION))
         return START_STICKY
     }
 
@@ -117,8 +118,20 @@ class IslandService : Service() {
                     MotionEvent.ACTION_UP -> {
                         if (expanded && downY - ev.rawY > dp(50)) {
                             hideCompletely(); true
+                        } else if (expanded && kotlin.math.abs(ev.rawY - downY) < dp(24)) {
+                            // 点展开的岛：跳进对话（有悬浮窗权限的App允许后台拉起Activity）
+                            try {
+                                val i = Intent(this, RouteActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                            or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                            or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                    putExtra("conversationId", tapConversation)
+                                }
+                                startActivity(i)
+                            } catch (_: Exception) {}
+                            hideCompletely(); true
                         } else if (!expanded && kotlin.math.abs(ev.rawY - downY) < dp(12)) {
-                            pending?.let { showInternal(it) }; true
+                            pending?.let { showInternal(it, null) }; true
                         } else expanded
                     }
                     else -> expanded
@@ -137,9 +150,11 @@ class IslandService : Service() {
     }
 
     private var pending: String? = null
+    private var tapConversation: String? = null
 
-    private fun showInternal(message: String) {
+    private fun showInternal(message: String, conversationId: String?) {
         val h = handler ?: return
+        if (conversationId != null) tapConversation = conversationId
         h.removeCallbacksAndMessages(null)
         if (!expanded) {
             pending = message
@@ -244,6 +259,7 @@ class IslandService : Service() {
 
     companion object {
         const val EXTRA_MESSAGE = "message"
+        const val EXTRA_CONVERSATION = "conversationId"
         private const val NOTIFICATION_ID = 4242
 
         @Volatile
@@ -268,11 +284,11 @@ class IslandService : Service() {
         }
 
         /** 主动消息入口：服务活着直接投，没活着尝试拉起；返回是否成功弹岛 */
-        fun show(context: Context, message: String): Boolean {
+        fun show(context: Context, message: String, conversationId: String? = null): Boolean {
             if (message.isBlank()) return false
             val live = instance
             if (live != null) {
-                live.handler?.post { live.showInternal(message) }
+                live.handler?.post { live.showInternal(message, conversationId) }
                 return true
             }
             try {
@@ -280,6 +296,7 @@ class IslandService : Service() {
                 bootPending = message.take(120)
                 val i = Intent(context, IslandService::class.java)
                     .putExtra(EXTRA_MESSAGE, message.take(120))
+                    .putExtra(EXTRA_CONVERSATION, conversationId)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(i)
                 } else {
