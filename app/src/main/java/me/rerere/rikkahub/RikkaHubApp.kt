@@ -100,6 +100,9 @@ class RikkaHubApp : Application() {
         // install crash handler
         CrashHandler.install(this)
 
+        // 灵动岛服务待命（有悬浮窗权限才启动，内部静默失败）
+        runCatching { me.rerere.rikkahub.service.IslandService.poke(this) }
+
         // Init QuickJS native library
         QuickJSLoader.init()
 

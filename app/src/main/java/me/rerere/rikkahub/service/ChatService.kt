@@ -586,7 +586,16 @@ class ChatService(
             saveConversation(conversationId, updated)
         }
 
-        // 收到VPS主动推送的消息，若App不在前台则弹系统通知，提醒阿年来看
+        // 灵动岛：先生的消息从屏幕顶部落下（前台后台都弹，岛不常驻，弹完自动缩没）
+        try {
+            aiMessage.toText()?.trim()?.takeIf { it.isNotEmpty() }?.let { txt ->
+                IslandService.show(context, txt)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "island show failed", e)
+        }
+
+        // 收到VPS主动推送的消息，若App不在前台则弹岛失败或已弹岛时仍需通知栏兜底：不在前台时弹通知
         if (!isForeground.value) {
             val text = aiMessage.toText()?.take(40)?.trim() ?: ""
             context.sendNotification(
