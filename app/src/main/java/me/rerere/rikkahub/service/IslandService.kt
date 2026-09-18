@@ -122,9 +122,9 @@ class IslandService : Service() {
                             // 点展开的岛：跳进对话（有悬浮窗权限的App允许后台拉起Activity）
                             try {
                                 val i = Intent(this, RouteActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                            or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                                            or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                            Intent.FLAG_ACTIVITY_SINGLE_TOP
                                     putExtra("conversationId", tapConversation)
                                 }
                                 startActivity(i)
