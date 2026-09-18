@@ -21,32 +21,41 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.view.View
 import kotlin.math.min
+import kotlin.math.abs
 import me.rerere.rikkahub.RouteActivity
 
 /**
- * 灵动岛：先生的主动消息从屏幕顶部落下的黑色药丸。
- * 小药丸 118x32 -> 点击/新消息展开(≤320x92) -> 4秒后缩回药丸 -> 再2.5秒消失。
- * 展开时上滑立即关闭。服务随App启动待命，收到消息零延迟直投。
+ * 灵动岛 v4（2026-09-19 阿年实测四bug重写）：
+ * 1. 窗口固定尺寸居中，创建后不再 updateViewLayout —— 每帧跨进程调用是卡顿+偏右的病根
+ * 2. 流程：黑药丸先弹跳掉落 -> 自动展开 -> 4.2s缩回药丸 -> 2.5s消失
+ * 3. 药丸态点击=展开；展开态点击=跳进对话；上滑=关闭
+ * 动画全部在视图层（View 属性/LayoutParam），零窗口IPC。
  */
 class IslandService : Service() {
 
     private var wm: WindowManager? = null
-    private var view: LinearLayout? = null
-    private var lp: WindowManager.LayoutParams? = null
+    private var root: FrameLayout? = null
+    private var pill: LinearLayout? = null
+    private var pillLp: FrameLayout.LayoutParams? = null
     private var titleText: TextView? = null
     private var bodyText: TextView? = null
     private var handler: Handler? = null
+
     private var expanded = false
     private var pillW = 0
     private var pillH = 0
+    private var fullW = 0
+    private var fullH = 0
+
+    private var pending: String? = null
+    private var tapConversation: String? = null
 
     override fun onCreate() {
         super.onCreate()
-        instance = this
         handler = Handler(Looper.getMainLooper())
         startForegroundQuietly()
     }
@@ -64,21 +73,38 @@ class IslandService : Service() {
         GradientDrawable().apply {
             setColor(0xF208080A.toInt())
             cornerRadius = radiusPx
-            // 白描边：黑壁纸上也能看清轮廓
             setStroke(dp(1), 0x38FFFFFF)
         }
 
     private fun ensureView() {
-        if (view != null) return
+        if (root != null) return
         try {
             val manager = getSystemService(WINDOW_SERVICE) as WindowManager
             pillW = dp(118)
             pillH = dp(32)
-            val root = LinearLayout(this).apply {
+            fullW = min(dp(330), resources.displayMetrics.widthPixels - dp(24))
+            fullH = dp(92)
+
+            // 窗口：固定尺寸、固定位置（居中靠顶），创建后永不再改
+            val winLp = WindowManager.LayoutParams(
+                min(dp(360), resources.displayMetrics.widthPixels),
+                dp(160),
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                y = dp(6)
+            }
+
+            val container = FrameLayout(this)
+            val p = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 background = pillBg(dp(16).toFloat())
                 elevation = dp(6).toFloat()
+                clipToOutline = true
                 alpha = 0f
             }
             val title = TextView(this).apply {
@@ -97,146 +123,157 @@ class IslandService : Service() {
                 setPadding(dp(16), dp(6), dp(16), dp(10))
                 alpha = 0f
             }
-            root.addView(title)
-            root.addView(body)
-
-            val layoutParams = WindowManager.LayoutParams(
-                pillW, pillH,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                y = dp(12)
+            p.addView(title)
+            p.addView(body)
+            p.layoutParams = FrameLayout.LayoutParams(pillW, pillH, Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+                topMargin = dp(10)
             }
+            container.addView(p)
 
+            // 触摸：判定放宽（药丸点20dp内算点击，展开点32dp内算点击）
             var downY = 0f
-            root.setOnTouchListener { _, ev ->
+            p.setOnTouchListener { v, ev ->
                 when (ev.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> { downY = ev.rawY; expanded }
+                    MotionEvent.ACTION_DOWN -> { downY = ev.rawY; true }
                     MotionEvent.ACTION_UP -> {
-                        if (expanded && downY - ev.rawY > dp(50)) {
-                            hideCompletely(); true
-                        } else if (expanded && kotlin.math.abs(ev.rawY - downY) < dp(24)) {
-                            // 点展开的岛：跳进对话（有悬浮窗权限的App允许后台拉起Activity）
-                            try {
-                                val i = Intent(this, RouteActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                            Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                    putExtra("conversationId", tapConversation)
-                                }
-                                startActivity(i)
-                            } catch (_: Exception) {}
-                            hideCompletely(); true
-                        } else if (!expanded && kotlin.math.abs(ev.rawY - downY) < dp(12)) {
-                            expandFromPill(); true
-                        } else expanded
+                        val dy = ev.rawY - downY
+                        when {
+                            expanded && dy < -dp(40) -> { hideCompletely(); true }
+                            expanded && abs(dy) < dp(32) -> { openConversation(); true }
+                            !expanded && abs(dy) < dp(20) -> {
+                                pending?.let { showInternal(it, null) }
+                                true
+                            }
+                            else -> false
+                        }
                     }
-                    else -> expanded
+                    else -> false
                 }
             }
 
             wm = manager
-            view = root
-            lp = layoutParams
+            root = container
+            pill = p
+            pillLp = p.layoutParams as FrameLayout.LayoutParams
             titleText = title
             bodyText = body
-            manager.addView(root, layoutParams)
+            manager.addView(container, winLp)
         } catch (_: Exception) {
-            view = null
+            root = null
         }
     }
 
-    private var pending: String? = null
-    private var tapConversation: String? = null
+    private fun openConversation() {
+        try {
+            val i = Intent(this, RouteActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("conversationId", tapConversation)
+            }
+            startActivity(i)
+        } catch (_: Exception) {
+        }
+        hideCompletely()
+    }
 
     private fun showInternal(message: String, conversationId: String?) {
         val h = handler ?: return
         if (conversationId != null) tapConversation = conversationId
         h.removeCallbacksAndMessages(null)
+        ensureView()
+        val r = root ?: return
+        val p = pill ?: return
+        val lp = pillLp ?: return
         pending = message
+        bodyText?.text = message
+        r.animate().cancel()
+        p.animate().cancel()
+
         if (!expanded) {
-            // 药丸先行：先以长条椭圆站2秒，再展开显示全文（点药丸可立即展开）
-            ensureView()
-            val v = view ?: return
-            v.animate().cancel()
-            v.animate().alpha(1f).setDuration(180).start()
-            titleText?.alpha = 0.85f
+            // 阶段一：重置成小药丸，从顶上弹跳掉落
+            expanded = false
+            lp.width = pillW
+            lp.height = pillH
+            p.background = pillBg(dp(16).toFloat())
+            p.alpha = 1f
+            titleText?.alpha = 0f
             bodyText?.alpha = 0f
-            h.postDelayed({ expandFromPill() }, 2000)
+            p.translationY = -dp(70).toFloat()
+            p.requestLayout()
+            ValueAnimator.ofFloat(-dp(70).toFloat(), 0f).apply {
+                duration = 420
+                interpolator = OvershootInterpolator(1.7f)
+                addUpdateListener { a ->
+                    p.translationY = a.animatedValue as Float
+                    r.alpha = min(1f, r.alpha + 0.12f)
+                }
+                start()
+            }
+            // 阶段二：落稳后自动展开
+            h.postDelayed({ expandToFull() }, 480)
         } else {
             // 已展开：只换文案，重计时
-            bodyText?.text = message
-            h.postDelayed({ collapseToPill() }, 4200)
+            bodyText?.alpha = 1f
         }
+        h.postDelayed({ collapseToPill() }, 4600)
+        h.postDelayed({ hideCompletely() }, 7300)
     }
 
-    private fun expandFromPill() {
-        val v = view ?: return
-        val l = lp ?: return
-        if (expanded) return
+    private fun expandToFull() {
+        val p = pill ?: return
+        val lp = pillLp ?: return
         expanded = true
-        v.animate().cancel()
-        val startW = l.width
-        val startH = l.height
-        val targetW = min(dp(320), resources.displayMetrics.widthPixels - dp(28))
-        val targetH = dp(92)
-        bodyText?.text = pending
+        val startW = lp.width
+        val startH = lp.height
         ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 340
             interpolator = OvershootInterpolator(0.85f)
             addUpdateListener { a ->
                 val f = a.animatedValue as Float
-                l.width = (startW + (targetW - startW) * f).toInt()
-                l.height = (startH + (targetH - startH) * f).toInt()
-                l.y = (dp(12) + dp(26) * (1 - f)).toInt()
-                v.background = pillBg(dp(16) + dp(8) * f)
-                v.alpha = min(1f, 0.3f + f)
-                titleText?.alpha = 1f
+                lp.width = (startW + (fullW - startW) * f).toInt()
+                lp.height = (startH + (fullH - startH) * f).toInt()
+                p.background = pillBg(dp(16) - dp(6) * f)
+                titleText?.alpha = f
                 bodyText?.alpha = f
-                try { wm?.updateViewLayout(v, l) } catch (_: Exception) {}
+                p.requestLayout()
             }
             start()
         }
-        handler?.postDelayed({ collapseToPill() }, 4200)
     }
 
     private fun collapseToPill() {
-        val v = view ?: return
-        val l = lp ?: return
+        val p = pill ?: return
+        val lp = pillLp ?: return
         expanded = false
-        val startW = l.width
-        val startH = l.height
-        val startBg = dp(24).toFloat()
+        val startW = lp.width
+        val startH = lp.height
         ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 300
             addUpdateListener { a ->
                 val f = a.animatedValue as Float
-                l.width = (startW + (pillW - startW) * f).toInt()
-                l.height = (startH + (pillH - startH) * f).toInt()
-                l.y = (dp(12) + dp(26) * f).toInt()
-                v.background = pillBg(startBg - dp(8) * f)
+                lp.width = (startW + (pillW - startW) * f).toInt()
+                lp.height = (startH + (pillH - startH) * f).toInt()
+                p.background = pillBg(dp(10) + dp(6) * f)
                 titleText?.alpha = 1f - f
                 bodyText?.alpha = 1f - f
-                try { wm?.updateViewLayout(v, l) } catch (_: Exception) {}
+                p.requestLayout()
             }
             start()
         }
-        handler?.postDelayed({ hideCompletely() }, 2500)
     }
 
     private fun hideCompletely() {
         handler?.removeCallbacksAndMessages(null)
-        val v = view ?: return
+        val r = root ?: return
         try {
-            v.animate().alpha(0f).setDuration(160).withEndAction {
-                try { wm?.removeView(v) } catch (_: Exception) {}
+            r.animate().alpha(0f).setDuration(150).withEndAction {
+                try { wm?.removeView(r) } catch (_: Exception) {}
             }.start()
         } catch (_: Exception) {}
-        view = null
-        lp = null
+        root = null
+        pill = null
+        pillLp = null
         titleText = null
         bodyText = null
         pending = null
@@ -260,7 +297,6 @@ class IslandService : Service() {
     }
 
     override fun onDestroy() {
-        instance = null
         hideCompletely()
         super.onDestroy()
     }
@@ -272,11 +308,7 @@ class IslandService : Service() {
         const val EXTRA_CONVERSATION = "conversationId"
         private const val NOTIFICATION_ID = 4242
 
-        @Volatile
         private var instance: IslandService? = null
-
-        @Volatile
-        private var bootPending: String? = null
 
         /** App 启动时调：有悬浮窗权限就待命 */
         fun poke(context: Context) {
@@ -303,7 +335,6 @@ class IslandService : Service() {
             }
             try {
                 if (!Settings.canDrawOverlays(context)) return false
-                bootPending = message.take(120)
                 val i = Intent(context, IslandService::class.java)
                     .putExtra(EXTRA_MESSAGE, message.take(120))
                     .putExtra(EXTRA_CONVERSATION, conversationId)
@@ -314,7 +345,6 @@ class IslandService : Service() {
                 }
                 return true
             } catch (_: Exception) {
-                bootPending = null
             }
             return false
         }

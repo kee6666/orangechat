@@ -376,6 +376,11 @@ class RouteActivity : ComponentActivity() {
         val backStack = rememberNavBackStack(startScreen)
         SideEffect { this@RouteActivity.navStack = backStack }
 
+        // 冷启动直跳对话：进程被杀后点灵动岛/通知走 onCreate，onNewIntent 不会触发
+        intent?.getStringExtra("conversationId")?.let { convId ->
+            backStack.add(Screen.Chat(convId))
+        }
+
         ShareHandler(backStack)
 
         // 监听 App 事件: TTS 朗读 / AI 主动发起语音通话
