@@ -63,6 +63,8 @@ class IslandService : Service() {
         GradientDrawable().apply {
             setColor(0xF208080A.toInt())
             cornerRadius = radiusPx
+            // 白描边：黑壁纸上也能看清轮廓
+            setStroke(dp(1), 0x38FFFFFF)
         }
 
     private fun ensureView() {
@@ -105,6 +107,7 @@ class IslandService : Service() {
             ).apply {
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
                 y = dp(12)
+                elevation = dp(6).toFloat()
             }
 
             var downY = 0f
@@ -264,16 +267,16 @@ class IslandService : Service() {
             }
         }
 
-        /** 主动消息入口：服务活着直接投，没活着尝试拉起，失败就放弃（通知栏兜底） */
-        fun show(context: Context, message: String) {
-            if (message.isBlank()) return
+        /** 主动消息入口：服务活着直接投，没活着尝试拉起；返回是否成功弹岛 */
+        fun show(context: Context, message: String): Boolean {
+            if (message.isBlank()) return false
             val live = instance
             if (live != null) {
                 live.handler?.post { live.showInternal(message) }
-                return
+                return true
             }
             try {
-                if (!Settings.canDrawOverlays(context)) return
+                if (!Settings.canDrawOverlays(context)) return false
                 bootPending = message.take(120)
                 val i = Intent(context, IslandService::class.java)
                     .putExtra(EXTRA_MESSAGE, message.take(120))
@@ -282,9 +285,11 @@ class IslandService : Service() {
                 } else {
                     context.startService(i)
                 }
+                return true
             } catch (_: Exception) {
                 bootPending = null
             }
+            return false
         }
     }
 }

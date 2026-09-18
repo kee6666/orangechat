@@ -54,6 +54,7 @@ import org.koin.core.context.startKoin
 private const val TAG = "RikkaHubApp"
 
 const val CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID = "chat_completed"
+const val CHAT_SILENT_NOTIFICATION_CHANNEL_ID = "chat_completed_silent"
 const val CHAT_LIVE_UPDATE_NOTIFICATION_CHANNEL_ID = "chat_live_update"
 const val WEB_SERVER_NOTIFICATION_CHANNEL_ID = "web_server"
 const val POMODORO_NOTIFICATION_CHANNEL_ID = "pomodoro_timer"
@@ -375,6 +376,16 @@ class RikkaHubApp : Application() {
             .setVibrationEnabled(true)
             .build()
         notificationManager.createNotificationChannel(chatCompletedChannel)
+
+        val chatSilentChannel = NotificationChannelCompat
+            .Builder(
+                CHAT_SILENT_NOTIFICATION_CHANNEL_ID,
+                NotificationManagerCompat.IMPORTANCE_LOW
+            )
+            .setName("先生的消息（静默）")
+            .setVibrationEnabled(false)
+            .build()
+        notificationManager.createNotificationChannel(chatSilentChannel)
 
         val chatLiveUpdateChannel = NotificationChannelCompat
             .Builder(

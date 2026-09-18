@@ -64,6 +64,7 @@ import me.rerere.ai.ui.isEmptyInputMessage
 import me.rerere.common.android.Logging
 import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID
+import me.rerere.rikkahub.CHAT_SILENT_NOTIFICATION_CHANNEL_ID
 import me.rerere.rikkahub.CHAT_LIVE_UPDATE_NOTIFICATION_CHANNEL_ID
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.RouteActivity
@@ -587,25 +588,26 @@ class ChatService(
         }
 
         // 灵动岛：先生的消息从屏幕顶部落下（前台后台都弹，岛不常驻，弹完自动缩没）
+        var islandShown = false
         try {
             aiMessage.toText()?.trim()?.takeIf { it.isNotEmpty() }?.let { txt ->
-                IslandService.show(context, txt)
+                islandShown = IslandService.show(context, txt)
             }
         } catch (e: Exception) {
             Log.w(TAG, "island show failed", e)
         }
 
-        // 收到VPS主动推送的消息，若App不在前台则弹岛失败或已弹岛时仍需通知栏兜底：不在前台时弹通知
+        // 通知兜底：岛弹成功→静默落通知栏（不横幅不抢点击）；岛没弹出来→原横幅兜底
         if (!isForeground.value) {
             val text = aiMessage.toText()?.take(40)?.trim() ?: ""
             context.sendNotification(
-                channelId = CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID,
+                channelId = if (islandShown) CHAT_SILENT_NOTIFICATION_CHANNEL_ID else CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID,
                 notificationId = conversationId.hashCode() + 9000
             ) {
                 title = "先生主动给你留了言"
                 content = text
                 autoCancel = true
-                useDefaults = true
+                useDefaults = !islandShown
                 category = NotificationCompat.CATEGORY_MESSAGE
                 contentIntent = getPendingIntent(context, conversationId)
             }
