@@ -77,6 +77,7 @@ class IslandService : Service() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 background = pillBg(dp(16).toFloat())
+                elevation = dp(6).toFloat()
                 alpha = 0f
             }
             val title = TextView(this).apply {
@@ -107,7 +108,6 @@ class IslandService : Service() {
             ).apply {
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
                 y = dp(12)
-                elevation = dp(6).toFloat()
             }
 
             var downY = 0f
