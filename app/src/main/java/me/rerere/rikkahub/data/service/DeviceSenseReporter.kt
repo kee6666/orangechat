@@ -107,6 +107,13 @@ object DeviceSenseReporter {
                         lastReportTs = now
                         report(screen, app, pkg)
 
+                        // 原子岛：本地规则判定，零延迟零配额
+                        if (screen == "on" && prevScreen == "off") {
+                            LocalIslandBrain.onScreenOn(context, app, pkg)
+                        } else if (screen == "off" && prevScreen == "on") {
+                            LocalIslandBrain.onScreenOff()
+                        }
+
                         // 亮屏事件：她刚拿起手机，允许触发（内容由VPS侧中性化）
                         if (screen == "on" && prevScreen == "off" &&
                             now - lastEventTs >= MIN_EVENT_INTERVAL_MS
@@ -128,6 +135,8 @@ object DeviceSenseReporter {
                         lastEventPkg = pkg
                         Log.i(TAG, "App settled ${APP_SETTLE_MIN_MS / 60000}min in $app, firing app_change (one-shot)")
                         reportEvent("app_change", app, pkg)
+                        // 原子岛：购物/音乐停留场景
+                        LocalIslandBrain.onAppSettled(context, app, pkg)
                         // 不再立刻取件：消息留在outbox，由ProactiveMessageService定时器
                         // 按自然节奏取走展示，彻底不跟"切应用"绑在一起。
                     }
