@@ -199,7 +199,7 @@ class AudioEarService : Service() {
             }
             val desc = when {
                 ratio < 0.15 -> "她在放音乐，纯音乐居多"
-                gender.isNotEmpty() -> "她在放音乐，有$gender在唱"
+                gender.isNotEmpty() -> "她在放音乐，有${gender}在唱"
                 else -> "她在放音乐，混着人声"
             }
             reportToVps("music", desc)
