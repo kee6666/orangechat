@@ -58,8 +58,9 @@ class AudioEarService : Service() {
     private var handler: Handler? = null
     private var buf: ShortArray? = null
     private var sessionStart = 0L
-    private var musicMs = 0L
-    private var speechMs = 0L
+    private var activeMs = 0L
+    private var voicedMs = 0L
+    private val pitches = mutableListOf<Double>()
     private var lastReportedKind = ""
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -170,9 +171,12 @@ class AudioEarService : Service() {
                 }
                 val rms = sqrt(sum / n)
                 if (rms > 120.0) {
-                    speechMs += 500
-                } else {
-                    musicMs += 500
+                    activeMs += 500
+                    val f0 = estimatePitch(b, n)
+                    if (f0 > 0.0) {
+                        voicedMs += 500
+                        if (pitches.size < 600) pitches.add(f0)
+                    }
                 }
                 evaluate(System.currentTimeMillis())
             }
@@ -183,10 +187,64 @@ class AudioEarService : Service() {
     private fun evaluate(now: Long) {
         if (lastReportedKind.isNotEmpty()) return
         val elapsed = now - sessionStart
-        if (elapsed >= MUSIC_MIN_MS && musicMs >= MUSIC_MIN_MS && speechMs < musicMs / 4) {
+        if (elapsed >= MUSIC_MIN_MS && activeMs >= MUSIC_MIN_MS * 0.7) {
             lastReportedKind = "music"
-            reportToVps("music", "她在放音乐，听了一阵")
+            val ratio = if (activeMs > 0) voicedMs.toDouble() / activeMs else 0.0
+            val p = medianPitch()
+            val gender = when {
+                p == 0.0 -> ""
+                p < 165.0 -> "男声"
+                p <= 180.0 -> "男女交界的声音"
+                else -> "女声"
+            }
+            val desc = when {
+                ratio < 0.15 -> "她在放音乐，纯音乐居多"
+                gender.isNotEmpty() -> "她在放音乐，有$gender在唱"
+                else -> "她在放音乐，混着人声"
+            }
+            reportToVps("music", desc)
         }
+    }
+
+    /** 基频中位数：男声基频约85-180Hz，女声约165-255Hz；165-180重叠区单独报 */
+    private fun medianPitch(): Double {
+        if (pitches.size < 8) return 0.0
+        val s = pitches.sorted()
+        val m = s[s.size / 2]
+        return if (m in 60.0..300.0) m else 0.0
+    }
+
+    /** 简化NCCF音高估计：返回基频Hz，没人声返回0 */
+    private fun estimatePitch(buf: ShortArray, n: Int): Double {
+        if (n < 2048) return 0.0
+        val win = 2048
+        val start = (n - win) / 2
+        var e0 = 0.0
+        for (i in 0 until win) {
+            val v = buf[start + i].toDouble()
+            e0 += v * v
+        }
+        if (e0 < win * 100.0 * 100.0) return 0.0
+        val minLag = 16000 / 300
+        val maxLag = 16000 / 60
+        var bestLag = 0
+        var bestCorr = 0.0
+        for (lag in minLag..maxLag) {
+            var corr = 0.0
+            var e1 = 0.0
+            for (i in 0 until win - maxLag) {
+                val a2 = buf[start + i].toDouble()
+                val b2 = buf[start + i + lag].toDouble()
+                corr += a2 * b2
+                e1 += b2 * b2
+            }
+            val nccf = corr / (sqrt(e0 * e1) + 1e-9)
+            if (nccf > bestCorr) {
+                bestCorr = nccf
+                bestLag = lag
+            }
+        }
+        return if (bestLag > 0 && bestCorr > 0.35) 16000.0 / bestLag else 0.0
     }
 
     private fun reportToVps(kind: String, summary: String) {
