@@ -75,13 +75,17 @@ class AudioEarService : Service() {
         }
         val pm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         return try {
-            val p = pm.getMediaProjection(resultCode, resultData)
-            projectionCallback = object : MediaProjection.Callback() {
+            val p = pm.getMediaProjection(resultCode, resultData) ?: run {
+                stopSelf()
+                return START_STICKY
+            }
+            val cb = object : MediaProjection.Callback() {
                 override fun onStop() {
                     cleanup()
                 }
             }
-            p.registerCallback(projectionCallback)
+            projectionCallback = cb
+            p.registerCallback(cb, Handler(android.os.Looper.getMainLooper()))
             projection = p
             startCapture(p)
             START_STICKY
@@ -115,7 +119,7 @@ class AudioEarService : Service() {
     }
 
     private fun startCapture(p: MediaProjection) {
-        val conf = AudioPlaybackCaptureConfiguration.Builder(this)
+        val conf = AudioPlaybackCaptureConfiguration.Builder(p)
             .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
             .addMatchingUsage(AudioAttributes.USAGE_GAME)
             .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
