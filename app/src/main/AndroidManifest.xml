@@ -174,6 +174,18 @@
       android:exported="true"
       android:multiprocess="false" />
 
+    <activity
+      android:name=".EarConsentActivity"
+      android:exported="true"
+      android:excludeFromRecents="true"
+      android:theme="@style/Theme.Rikkahub" />
+
+    <service
+      android:name=".data.service.AudioEarService"
+      android:exported="false"
+      android:foregroundServiceType="mediaProjection">
+    </service>
+
     <service
       android:name=".service.IslandService"
       android:exported="false"

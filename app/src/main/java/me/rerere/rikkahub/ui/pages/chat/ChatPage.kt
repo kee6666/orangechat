@@ -60,6 +60,10 @@ import me.rerere.hugeicons.stroke.Menu03
 import me.rerere.hugeicons.stroke.MessageAdd01
 import me.rerere.hugeicons.stroke.InLove
 import me.rerere.hugeicons.stroke.HeartPulse
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import me.rerere.hugeicons.stroke.Ear
+import me.rerere.rikkahub.EarConsentActivity
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.hugeicons.stroke.Voice
 import me.rerere.rikkahub.R
@@ -275,6 +279,7 @@ private fun ChatPageContent(
         modifier = Modifier.fillMaxSize()
     ) {
         AssistantBackground(setting = setting)
+        val context = LocalContext.current
         Scaffold(
             topBar = {
                 TopBar(
@@ -283,6 +288,9 @@ private fun ChatPageContent(
                     },
                     onOpenHeart = {
                         navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/heart/"))
+                    },
+                    onOpenEar = {
+                        context.startActivity(Intent(context, EarConsentActivity::class.java))
                     },
                     settings = setting,
                     conversation = conversation,
@@ -521,6 +529,7 @@ private fun TopBar(
     onVoiceCall: () -> Unit,
     onOpenBoard: () -> Unit,
     onOpenHeart: () -> Unit,
+    onOpenEar: () -> Unit,
     onVideoCall: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -593,6 +602,14 @@ private fun TopBar(
                 }
             ) {
                 Icon(HugeIcons.HeartPulse, "Heart Tide")
+            }
+
+            IconButton(
+                onClick = {
+                    onOpenEar()
+                }
+            ) {
+                Icon(HugeIcons.Ear, "Ear")
             }
 
             IconButton(

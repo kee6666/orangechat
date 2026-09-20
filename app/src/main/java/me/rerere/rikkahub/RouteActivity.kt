@@ -212,6 +212,9 @@ class RouteActivity : ComponentActivity() {
         enableEdgeToEdge()
         disableNavigationBarContrast()
         super.onCreate(savedInstanceState)
+        if (intent?.data?.toString()?.contains("ear_consent") == true) {
+            startActivity(Intent(this, EarConsentActivity::class.java))
+        }
 
         if (CrashHandler.hasCrashed(this)) {
             startActivity(Intent(this, SafeModeActivity::class.java))
