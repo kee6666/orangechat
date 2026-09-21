@@ -23,4 +23,4 @@ if __name__ == "__main__":
     t.start()
     wait_upstream()
     print("[launcher] nocturne up, starting oauth shim on 7860", flush=True)
-    uvicorn.run(shim_app, host="0.0.0.0", port=7860)
+    uvicorn.run(shim_app, host="0.0.0.0", port=int(os.environ.get("PORT", "7860")))
