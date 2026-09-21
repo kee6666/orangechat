@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: nocturne-memory
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: API_TOKEN
+        sync: false
+      - key: PASSCODE
+        sync: false
+      - key: BASE_URL
+        sync: false
+      - key: LOCALE
+        value: zh_CN
+      - key: NOCTURNE_SKIP_BUILD
+        value: "1"
