@@ -1,20 +1,20 @@
 /*
- * 橘瓣 OrangeChat - EarConsentActivity 耳朵授权页（v3，2026-09-23 修复）
+ * 橘瓣 OrangeChat - EarConsentActivity 耳朵授权页（v4，2026-09-23 修复）
  *
- * v2 的病：
- *   1. 进来无条件走 if(!agreed) 分支弹框 —— 全流程没有任何路径传 agree=true，
- *      所以每点一次耳朵就重弹一次系统授权框，用户看到的"每次都弹"就是这么来的。
- *   2. 授权拿到的 resultCode/resultData 只通过 Intent 传给 Service，用完即弃，
- *      Service 一被系统回收就永久失聪，下次再点又从头授权。
+ * 三版病史：
+ *   v2：逻辑整个写反，agree 标志永远为 false -> 每点必弹框。
+ *   v3：想用 SharedPreferences 存 token，但 MediaProjection 凭证带 Binder，序列化
+ *       往返必失败 -> 复原失败落回弹框分支 -> 还是每点必弹。
+ *   v4（本版）：放弃持久化 token 的幻想。token 只放进程内存（EarTokenHolder），
+ *       同进程内复用不弹框；进程被系统杀了，就老老实实再弹一次。
  *
- * v3 的修法：
- *   1. 进来先读 SharedPreferences("audio_ear") 的 consent；已授权就直接拉起
- *      Service（走 token 复用路径），不弹框。
- *   2. 首次授权成功后，把 resultCode 存进 prefs，resultData 的 Intent 用
- *      toUri(URI_INTENT_SCHEME) 落盘成字符串，Service 重启能从 prefs 复原。
- *   3. 重新授权：带 force=true 进来才允许重弹框。
+ * 行为预期：
+ *   - 装机后第一次点耳朵 -> 弹一次系统授权框，同意，耳朵开。
+ *   - 之后同一次开机、橘瓣进程还活着时，点耳朵不再弹，提示"耳朵已经开着"。
+ *   - 手机重启 / 橘瓣被系统彻底杀掉后，第一次点还会弹一次（无法避免）。
+ *   - 想减少这种弹框：系统设置里给橘瓣关掉电池优化。
  *
- * 铁律不变：没有她的明确同意，耳朵永远沉默。consent 写在 prefs，装死不商量。
+ * 铁律不变：没有她的明确同意，耳朵永远沉默。
  */
 package me.rerere.rikkahub
 
@@ -27,14 +27,13 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import me.rerere.rikkahub.data.service.AudioEarService
+import me.rerere.rikkahub.data.service.EarTokenHolder
 
 class EarConsentActivity : ComponentActivity() {
 
     companion object {
         const val PREFS = "audio_ear"
         const val KEY_CONSENT = "consent"
-        const val KEY_RESULT_CODE = "projection_result_code"
-        const val KEY_RESULT_DATA_URI = "projection_result_data_uri"
 
         fun open(context: Context, forceReauth: Boolean = false) {
             val i = Intent(context, EarConsentActivity::class.java)
@@ -43,7 +42,7 @@ class EarConsentActivity : ComponentActivity() {
             context.startActivity(i)
         }
 
-        fun isGranted(context: Context): Boolean =
+        fun hasConsented(context: Context): Boolean =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getString(KEY_CONSENT, null) == "granted"
     }
@@ -54,12 +53,9 @@ class EarConsentActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK && result.data != null) {
                 val data = result.data!!
-                val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-                prefs.edit()
-                    .putString(KEY_CONSENT, "granted")
-                    .putInt(KEY_RESULT_CODE, result.resultCode)
-                    .putString(KEY_RESULT_DATA_URI, data.toUri(Intent.URI_INTENT_SCHEME))
-                    .apply()
+                EarTokenHolder.save(result.resultCode, data)
+                getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .edit().putString(KEY_CONSENT, "granted").apply()
                 AudioEarService.tryStart(this, result.resultCode, data)
                 toast("耳朵开了，在听，不吵你")
                 finish()
@@ -74,22 +70,12 @@ class EarConsentActivity : ComponentActivity() {
         pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
         val force = intent.getBooleanExtra("force", false)
-        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-        val granted = prefs.getString(KEY_CONSENT, null) == "granted"
-        val savedCode = prefs.getInt(KEY_RESULT_CODE, -1)
-        val savedUri = prefs.getString(KEY_RESULT_DATA_URI, null)
 
-        if (granted && !force && savedCode >= 0 && savedUri != null) {
-            try {
-                val data = Intent.parseUri(savedUri, Intent.URI_INTENT_SCHEME)
-                AudioEarService.tryStart(this, savedCode, data)
-                toast("耳朵已经开着")
-            } catch (e: Exception) {
-                prefs.edit().remove(KEY_CONSENT).remove(KEY_RESULT_DATA_URI).apply()
-                toast("耳朵要重新开一下")
-                projectionLauncher.launch(pm.createScreenCaptureIntent())
-                return
-            }
+        if (!force && EarTokenHolder.alive()) {
+            val code = EarTokenHolder.code()
+            val data = EarTokenHolder.data()!!
+            AudioEarService.tryStart(this, code, data)
+            toast("耳朵已经开着")
             finish()
             return
         }

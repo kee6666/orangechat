@@ -1,15 +1,14 @@
 /*
- * 橘瓣 OrangeChat - AudioEarService 耳朵（v3，2026-09-23 修复）
+ * 橘瓣 OrangeChat - AudioEarService 耳朵（v4，2026-09-23）
  * AudioPlaybackCapture 抓系统外放音频流 → 本地分析 → 摘要进感知
  *
- * v3 相对 v2 的改动：
- *   1. tryStart 支持 resultData 为 null 时从 SharedPreferences 复原（token 复用）。
- *   2. 被系统回收后自动重试一次（3 秒后），不再永久失聪。
- *   3. 修复 v2 里 rms 阈值与 pitch 窗口不匹配导致的 voicedMs 虚高。
+ * v4 相对 v3 的改动：
+ *   1. token 不再从 SharedPreferences 复原（那条路走不通），只从内存 EarTokenHolder 取。
+ *   2. 加明确日志点，方便 logcat -s AudioEarService 定位。
  *
  * 铁律：
- * - 只听系统外放的媒体音频流，不碰麦克风（她本人说话，另案单独授权）
- * - 微信/QQ 系统通话音频 Android 不允许抓取，不碰
+ * - 只听系统外放的媒体音频流，不碰麦克风
+ * - 微信/QQ 系统通话音频不碰
  * - 只出摘要不出原文，不进对话记录
  */
 package me.rerere.rikkahub.data.service
@@ -40,19 +39,25 @@ class AudioEarService : Service() {
         const val TAG = "AudioEarService"
         const val EXTRA_RESULT_CODE = "resultCode"
         const val EXTRA_RESULT_DATA = "resultData"
-        const val EAR_REQUEST_CODE = 7001
         private const val CHANNEL_ID = "audio_ear"
         private const val NOTIFICATION_ID = 4343
         private const val SAMPLE_RATE = 16000
         private const val MUSIC_MIN_MS = 90_000L
         private const val RMS_ACTIVE = 120.0
-        private const val RETRY_DELAY_MS = 3_000L
-        private const val MAX_RETRY = 1
 
         fun tryStart(context: Context, resultCode: Int, data: Intent?) {
-            if (android.os.Build.VERSION.SDK_INT < 29) return
-            val p = context.getSharedPreferences("audio_ear", Context.MODE_PRIVATE)
-            if (p.getString("consent", null) != "granted") return
+            if (android.os.Build.VERSION.SDK_INT < 29) {
+                Log.w(TAG, "tryStart: sdk too low")
+                return
+            }
+            if (data != null) EarTokenHolder.save(resultCode, data)
+            val consent = context.getSharedPreferences("audio_ear", Context.MODE_PRIVATE)
+                .getString("consent", null)
+            if (consent != "granted") {
+                Log.w(TAG, "tryStart: no consent")
+                return
+            }
+            Log.i(TAG, "tryStart: launching foreground service")
             val i = Intent(context, AudioEarService::class.java)
                 .putExtra(EXTRA_RESULT_CODE, resultCode)
             if (data != null) i.putExtra(EXTRA_RESULT_DATA, data)
@@ -61,7 +66,6 @@ class AudioEarService : Service() {
     }
 
     private var projection: MediaProjection? = null
-    private var projectionCallback: MediaProjection.Callback? = null
     private var record: AudioRecord? = null
     private var handler: Handler? = null
     private var buf: ShortArray? = null
@@ -70,71 +74,55 @@ class AudioEarService : Service() {
     private var voicedMs = 0L
     private val pitches = mutableListOf<Double>()
     private var lastReportedKind = ""
-    private var retries = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent == null || record != null) return START_STICKY
+        if (record != null) {
+            Log.i(TAG, "onStartCommand: already capturing")
+            return START_STICKY
+        }
         startForegroundQuietly()
 
-        var resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
-        var resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+        var resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, -1) ?: -1
+        var resultData = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
 
         if (resultData == null || resultCode < 0) {
-            val p = getSharedPreferences("audio_ear", MODE_PRIVATE)
-            resultCode = p.getInt("projection_result_code", -1)
-            val uri = p.getString("projection_result_data_uri", null)
-            if (uri != null) {
-                resultData = try {
-                    Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
-                } catch (_: Exception) {
-                    null
-                }
+            if (EarTokenHolder.alive()) {
+                resultCode = EarTokenHolder.code()
+                resultData = EarTokenHolder.data()
+                Log.i(TAG, "onStartCommand: token recovered from memory holder")
             }
         }
 
         if (resultData == null || resultCode < 0) {
+            Log.w(TAG, "onStartCommand: no token, die")
             stopSelf()
             return START_STICKY
         }
 
         val pm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         return try {
-            val p = pm.getMediaProjection(resultCode, resultData) ?: run {
-                scheduleRetry()
+            val p = pm.getMediaProjection(resultCode, resultData)
+            if (p == null) {
+                Log.w(TAG, "getMediaProjection returned null")
                 stopSelf()
                 return START_STICKY
             }
-            val cb = object : MediaProjection.Callback() {
+            p.registerCallback(object : MediaProjection.Callback() {
                 override fun onStop() {
+                    Log.i(TAG, "projection onStop")
                     cleanup()
                 }
-            }
-            projectionCallback = cb
-            p.registerCallback(cb, Handler(android.os.Looper.getMainLooper()))
+            }, Handler(android.os.Looper.getMainLooper()))
             projection = p
-            retries = 0
             startCapture(p)
             START_STICKY
         } catch (e: Exception) {
-            Log.w(TAG, "projection failed", e)
-            scheduleRetry()
+            Log.w(TAG, "projection failed: " + e.message, e)
             stopSelf()
             START_STICKY
         }
-    }
-
-    private fun scheduleRetry() {
-        if (retries >= MAX_RETRY) return
-        retries++
-        val p = getSharedPreferences("audio_ear", MODE_PRIVATE)
-        if (p.getString("consent", null) != "granted") return
-        val code = p.getInt("projection_result_code", -1)
-        if (code < 0) return
-        Handler(android.os.Looper.getMainLooper()).postDelayed({
-            tryStart(this, code, null)
-        }, RETRY_DELAY_MS)
     }
 
     private fun startForegroundQuietly() {
@@ -155,7 +143,8 @@ class AudioEarService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, n)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground failed: " + e.message)
         }
     }
 
@@ -180,6 +169,7 @@ class AudioEarService : Service() {
                 .setAudioPlaybackCaptureConfig(conf)
                 .build()
             if (r.state != AudioRecord.STATE_INITIALIZED) {
+                Log.w(TAG, "AudioRecord not initialized, state=" + r.state)
                 stopSelf()
                 return
             }
@@ -191,9 +181,9 @@ class AudioEarService : Service() {
             sessionStart = System.currentTimeMillis()
             r.startRecording()
             handler?.post(loop)
-            Log.i(TAG, "ear capturing started")
+            Log.i(TAG, "capture started OK")
         } catch (e: Exception) {
-            Log.w(TAG, "capture init failed", e)
+            Log.w(TAG, "capture init failed: " + e.message, e)
             stopSelf()
         }
     }
@@ -220,15 +210,18 @@ class AudioEarService : Service() {
                         }
                     }
                 }
-                evaluate(System.currentTimeMillis())
+                evaluate(System.currentTimeMillis(), rms)
             }
             handler?.postDelayed(this, 500)
         }
     }
 
-    private fun evaluate(now: Long) {
+    private fun evaluate(now: Long, rms: Double) {
         if (lastReportedKind.isNotEmpty()) return
         val elapsed = now - sessionStart
+        if (elapsed % 30000 < 500) {
+            Log.i(TAG, "progress: elapsed=" + elapsed / 1000 + "s active=" + activeMs / 1000 + "s rms=" + rms.toInt())
+        }
         if (elapsed >= MUSIC_MIN_MS && activeMs >= MUSIC_MIN_MS * 0.7) {
             lastReportedKind = "music"
             val ratio = if (activeMs > 0) voicedMs.toDouble() / activeMs else 0.0
@@ -244,6 +237,7 @@ class AudioEarService : Service() {
                 gender.isNotEmpty() -> "她在放音乐，有${gender}在唱"
                 else -> "她在放音乐，混着人声"
             }
+            Log.i(TAG, "reporting: " + desc)
             reportToVps("music", desc)
         }
     }
@@ -302,9 +296,12 @@ class AudioEarService : Service() {
                     put("summary", summary)
                 }
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
+                val rc = conn.responseCode
+                Log.i(TAG, "reportToVps http=" + rc)
                 conn.inputStream.use { it.readBytes() }
                 conn.disconnect()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "reportToVps failed: " + e.message)
             }
         }.start()
     }
