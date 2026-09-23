@@ -290,7 +290,7 @@ private fun ChatPageContent(
                         navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/heart/"))
                     },
                     onOpenEar = {
-                        context.startActivity(Intent(context, EarConsentActivity::class.java))
+                        EarConsentActivity.open(context)
                     },
                     settings = setting,
                     conversation = conversation,

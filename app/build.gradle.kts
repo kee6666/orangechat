@@ -19,8 +19,8 @@ android {
         applicationId = "me.rerere.orangechat"
         minSdk = 26
         targetSdk = 37
-        versionCode = 202
-        versionName = "2.2.3-bell+fix22"
+        versionCode = 203
+        versionName = "2.2.3-bell+ear3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

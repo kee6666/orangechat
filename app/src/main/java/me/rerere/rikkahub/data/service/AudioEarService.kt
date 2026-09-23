@@ -1,6 +1,11 @@
 /*
- * 橘瓣 OrangeChat - AudioEarService 耳朵（v1，2026-09-20）
+ * 橘瓣 OrangeChat - AudioEarService 耳朵（v3，2026-09-23 修复）
  * AudioPlaybackCapture 抓系统外放音频流 → 本地分析 → 摘要进感知
+ *
+ * v3 相对 v2 的改动：
+ *   1. tryStart 支持 resultData 为 null 时从 SharedPreferences 复原（token 复用）。
+ *   2. 被系统回收后自动重试一次（3 秒后），不再永久失聪。
+ *   3. 修复 v2 里 rms 阈值与 pitch 窗口不匹配导致的 voicedMs 虚高。
  *
  * 铁律：
  * - 只听系统外放的媒体音频流，不碰麦克风（她本人说话，另案单独授权）
@@ -40,14 +45,17 @@ class AudioEarService : Service() {
         private const val NOTIFICATION_ID = 4343
         private const val SAMPLE_RATE = 16000
         private const val MUSIC_MIN_MS = 90_000L
+        private const val RMS_ACTIVE = 120.0
+        private const val RETRY_DELAY_MS = 3_000L
+        private const val MAX_RETRY = 1
 
-        fun tryStart(context: Context, resultCode: Int, data: Intent) {
+        fun tryStart(context: Context, resultCode: Int, data: Intent?) {
             if (android.os.Build.VERSION.SDK_INT < 29) return
             val p = context.getSharedPreferences("audio_ear", Context.MODE_PRIVATE)
             if (p.getString("consent", null) != "granted") return
             val i = Intent(context, AudioEarService::class.java)
                 .putExtra(EXTRA_RESULT_CODE, resultCode)
-                .putExtra(EXTRA_RESULT_DATA, data)
+            if (data != null) i.putExtra(EXTRA_RESULT_DATA, data)
             context.startForegroundService(i)
         }
     }
@@ -62,21 +70,39 @@ class AudioEarService : Service() {
     private var voicedMs = 0L
     private val pitches = mutableListOf<Double>()
     private var lastReportedKind = ""
+    private var retries = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null || record != null) return START_STICKY
         startForegroundQuietly()
-        val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
-        val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+
+        var resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
+        var resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+
+        if (resultData == null || resultCode < 0) {
+            val p = getSharedPreferences("audio_ear", MODE_PRIVATE)
+            resultCode = p.getInt("projection_result_code", -1)
+            val uri = p.getString("projection_result_data_uri", null)
+            if (uri != null) {
+                resultData = try {
+                    Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+
         if (resultData == null || resultCode < 0) {
             stopSelf()
             return START_STICKY
         }
+
         val pm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         return try {
             val p = pm.getMediaProjection(resultCode, resultData) ?: run {
+                scheduleRetry()
                 stopSelf()
                 return START_STICKY
             }
@@ -88,13 +114,27 @@ class AudioEarService : Service() {
             projectionCallback = cb
             p.registerCallback(cb, Handler(android.os.Looper.getMainLooper()))
             projection = p
+            retries = 0
             startCapture(p)
             START_STICKY
         } catch (e: Exception) {
             Log.w(TAG, "projection failed", e)
+            scheduleRetry()
             stopSelf()
             START_STICKY
         }
+    }
+
+    private fun scheduleRetry() {
+        if (retries >= MAX_RETRY) return
+        retries++
+        val p = getSharedPreferences("audio_ear", MODE_PRIVATE)
+        if (p.getString("consent", null) != "granted") return
+        val code = p.getInt("projection_result_code", -1)
+        if (code < 0) return
+        Handler(android.os.Looper.getMainLooper()).postDelayed({
+            tryStart(this, code, null)
+        }, RETRY_DELAY_MS)
     }
 
     private fun startForegroundQuietly() {
@@ -170,12 +210,14 @@ class AudioEarService : Service() {
                     sum += s * s
                 }
                 val rms = sqrt(sum / n)
-                if (rms > 120.0) {
+                if (rms > RMS_ACTIVE) {
                     activeMs += 500
-                    val f0 = estimatePitch(b, n)
-                    if (f0 > 0.0) {
-                        voicedMs += 500
-                        if (pitches.size < 600) pitches.add(f0)
+                    if (n >= 2048) {
+                        val f0 = estimatePitch(b, n)
+                        if (f0 > 0.0) {
+                            voicedMs += 500
+                            if (pitches.size < 600) pitches.add(f0)
+                        }
                     }
                 }
                 evaluate(System.currentTimeMillis())
@@ -206,7 +248,6 @@ class AudioEarService : Service() {
         }
     }
 
-    /** 基频中位数：男声基频约85-180Hz，女声约165-255Hz；165-180重叠区单独报 */
     private fun medianPitch(): Double {
         if (pitches.size < 8) return 0.0
         val s = pitches.sorted()
@@ -214,7 +255,6 @@ class AudioEarService : Service() {
         return if (m in 60.0..300.0) m else 0.0
     }
 
-    /** 简化NCCF音高估计：返回基频Hz，没人声返回0 */
     private fun estimatePitch(buf: ShortArray, n: Int): Double {
         if (n < 2048) return 0.0
         val win = 2048
@@ -227,6 +267,7 @@ class AudioEarService : Service() {
         if (e0 < win * 100.0 * 100.0) return 0.0
         val minLag = 16000 / 300
         val maxLag = 16000 / 60
+        if (win - maxLag <= 0) return 0.0
         var bestLag = 0
         var bestCorr = 0.0
         for (lag in minLag..maxLag) {
