@@ -45,10 +45,13 @@ object WebEyeReporter {
             return "页面没建好"
         }
         return try {
-            val url = webView.url ?: ""
-            val title = webView.title ?: ""
-            val raw = withContext(Dispatchers.Main) {
-                evaluateJavascriptBlocking(webView, buildExtractJs())
+            // url/title/evaluateJavascript 都必须在主线程读
+            val (url, title, raw) = withContext(Dispatchers.Main) {
+                Triple(
+                    webView.url ?: "",
+                    webView.title ?: "",
+                    evaluateJavascriptBlocking(webView, buildExtractJs())
+                )
             }
             val text = decodeJsString(raw)
             Log.i(TAG, "capture: url=$url title=$title rawLen=${raw?.length ?: -1} textLen=${text.length}")
@@ -90,13 +93,14 @@ object WebEyeReporter {
         }
     }
 
-    private fun postWebLogDetailed(url: String, title: String, text: String): String? {
+    private suspend fun postWebLogDetailed(url: String, title: String, text: String): String? {
         return postWebLog(url, title, text)
     }
 
     /** @return null=成功；非null=失败原因 */
-    private fun postWebLog(url: String, title: String, text: String): String? {
-        return try {
+    private suspend fun postWebLog(url: String, title: String, text: String): String? =
+        withContext(Dispatchers.IO) {
+        try {
             val json = JSONObject().apply {
                 put("url", url)
                 put("title", title)
