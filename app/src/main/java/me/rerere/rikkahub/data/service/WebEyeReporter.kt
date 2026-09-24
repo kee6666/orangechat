@@ -55,7 +55,7 @@ object WebEyeReporter {
             if (url.isBlank() && title.isBlank() && text.isBlank()) {
                 return "页面空着，先输个网址"
             }
-            if (postWebLogDetailed(url, title, text) == null) null else "传不出去"
+            postWebLogDetailed(url, title, text)
         } catch (e: Exception) {
             Log.w(TAG, "capture error: ${e.message}")
             "出错了"
@@ -91,11 +91,11 @@ object WebEyeReporter {
     }
 
     private fun postWebLogDetailed(url: String, title: String, text: String): String? {
-        val r = postWebLog(url, title, text)
-        return if (r) null else "传不出去"
+        return postWebLog(url, title, text)
     }
 
-    private fun postWebLog(url: String, title: String, text: String): Boolean {
+    /** @return null=成功；非null=失败原因 */
+    private fun postWebLog(url: String, title: String, text: String): String? {
         return try {
             val json = JSONObject().apply {
                 put("url", url)
@@ -118,14 +118,14 @@ object WebEyeReporter {
             conn.disconnect()
             if (code == 200) {
                 Log.i(TAG, "web_log ok: $title | $url")
-                true
+                null
             } else {
                 Log.w(TAG, "web_log failed: HTTP $code")
-                false
+                "HTTP " + code
             }
         } catch (e: Exception) {
-            Log.w(TAG, "postWebLog error: ${e.message}")
-            false
+            Log.w(TAG, "postWebLog error: ${e.javaClass.simpleName}: ${e.message}")
+            e.javaClass.simpleName + ":" + (e.message ?: "")
         }
     }
 }
