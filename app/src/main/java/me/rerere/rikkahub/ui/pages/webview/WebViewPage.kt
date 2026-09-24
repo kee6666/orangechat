@@ -10,8 +10,10 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Bug01
 import me.rerere.hugeicons.stroke.Earth
+import me.rerere.hugeicons.stroke.Eye
 import me.rerere.hugeicons.stroke.Refresh01
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,15 +32,26 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import me.rerere.rikkahub.data.service.WebEyeReporter
 import me.rerere.hugeicons.stroke.MoreVertical
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.webview.WebView
@@ -70,12 +83,23 @@ fun WebViewPage(url: String, content: String) {
 
     var showDropdown by remember { mutableStateOf(false) }
     var showConsoleSheet by remember { mutableStateOf(false) }
+    var eyeHint by remember { mutableStateOf<String?>(null) }
     val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+
+    // 眼睛提示条：亮一下自己淡掉
+    LaunchedEffect(eyeHint) {
+        if (eyeHint != null) {
+            delay(1800)
+            eyeHint = null
+        }
+    }
 
     BackHandler(state.canGoBack) {
         state.goBack()
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -91,6 +115,16 @@ fun WebViewPage(url: String, content: String) {
                     BackButton()
                 },
                 actions = {
+                    IconButton(onClick = {
+                        eyeHint = "在看…"
+                        scope.launch {
+                            val ok = WebEyeReporter.capture(state.webView)
+                            eyeHint = if (ok) "他看到了" else "没抓到"
+                        }
+                    }) {
+                        Icon(HugeIcons.Eye, contentDescription = "Let him see")
+                    }
+
                     IconButton(onClick = { state.reload() }) {
                         Icon(HugeIcons.Refresh01, contentDescription = "Refresh")
                     }
@@ -144,6 +178,26 @@ fun WebViewPage(url: String, content: String) {
                 .fillMaxSize()
                 .padding(it),
         )
+    }
+
+    eyeHint?.let { hint ->
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 72.dp)
+                .background(
+                    color = Color(0xCC000000),
+                    shape = RoundedCornerShape(20.dp)
+                )
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = hint,
+                color = Color.White,
+                fontSize = 13.sp
+            )
+        }
+    }
     }
 
     if (showConsoleSheet) {

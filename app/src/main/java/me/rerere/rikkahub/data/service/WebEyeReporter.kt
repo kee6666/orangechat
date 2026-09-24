@@ -1,0 +1,120 @@
+/*
+ * 橘瓣 OrangeChat
+ * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
+ * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
+ */
+
+package me.rerere.rikkahub.data.service
+
+import android.util.Log
+import android.webkit.WebView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.coroutines.resume
+
+/**
+ * 眼睛 —— 网页感知上报器
+ *
+ * 阿年做主的规则：点一下才看一眼，不是一直盯着。
+ * 她在橘瓣里开网页，点顶栏那颗眼睛，抓一次当前页，报到 VPS /web_log。
+ *
+ * 抓什么：标题、网址、正文前若干字。
+ * 不抓什么：不监听、不定时、不后台偷看。她没点，就永远不动。
+ */
+object WebEyeReporter {
+    private const val TAG = "WebEyeReporter"
+    private const val WEB_LOG_URL = "http://106.53.181.56:18002/web_log"
+
+    /** 单次抓取正文的最大字数（超出截断，不抓整站） */
+    private const val MAX_TEXT_CHARS = 3000
+
+    suspend fun capture(webView: WebView?): Boolean {
+        if (webView == null) {
+            Log.w(TAG, "capture: webView is null")
+            return false
+        }
+        return try {
+            val url = webView.url ?: ""
+            val title = webView.title ?: ""
+            val raw = withContext(Dispatchers.Main) {
+                evaluateJavascriptBlocking(webView, buildExtractJs())
+            }
+            val text = decodeJsString(raw)
+            if (url.isBlank() && title.isBlank() && text.isBlank()) {
+                Log.w(TAG, "capture: nothing to report")
+                return false
+            }
+            postWebLog(url, title, text)
+        } catch (e: Exception) {
+            Log.w(TAG, "capture error: ${e.message}")
+            false
+        }
+    }
+
+    private fun buildExtractJs(): String {
+        return "(function(){try{var n=document.querySelector('article')||document.querySelector('main')||document.body;var t=n?(n.innerText||''):'';t=t.replace(/\\n{2,}/g,'\\n').replace(/[ \\t]{2,}/g,' ').trim();return t.slice(0," + MAX_TEXT_CHARS + ");}catch(e){return '';}})();"
+    }
+
+    private suspend fun evaluateJavascriptBlocking(webView: WebView, js: String): String? =
+        suspendCancellableCoroutine { cont ->
+            try {
+                webView.evaluateJavascript(js) { value ->
+                    if (cont.isActive) cont.resume(value)
+                }
+            } catch (e: Exception) {
+                if (cont.isActive) cont.resume(null)
+            }
+        }
+
+    private fun decodeJsString(raw: String?): String {
+        if (raw.isNullOrBlank() || raw == "null") return ""
+        return try {
+            if (raw.length >= 2 && raw.startsWith("\"") && raw.endsWith("\"")) {
+                JSONObject("{\"v\":" + raw + "}").optString("v", "")
+            } else {
+                raw
+            }
+        } catch (e: Exception) {
+            raw.trim('"')
+        }
+    }
+
+    private fun postWebLog(url: String, title: String, text: String): Boolean {
+        return try {
+            val json = JSONObject().apply {
+                put("url", url)
+                put("title", title)
+                put("text", text)
+            }
+            val conn = URL(WEB_LOG_URL).openConnection() as HttpURLConnection
+            conn.apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connectTimeout = 5000
+                readTimeout = 5000
+                doOutput = true
+            }
+            OutputStreamWriter(conn.outputStream).use { writer ->
+                writer.write(json.toString())
+                writer.flush()
+            }
+            val code = conn.responseCode
+            conn.disconnect()
+            if (code == 200) {
+                Log.i(TAG, "web_log ok: $title | $url")
+                true
+            } else {
+                Log.w(TAG, "web_log failed: HTTP $code")
+                false
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "postWebLog error: ${e.message}")
+            false
+        }
+    }
+}
