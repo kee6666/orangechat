@@ -33,10 +33,16 @@ object WebEyeReporter {
     /** 单次抓取正文的最大字数（超出截断，不抓整站） */
     private const val MAX_TEXT_CHARS = 3000
 
-    suspend fun capture(webView: WebView?): Boolean {
+    suspend fun capture(webView: WebView?): Boolean = captureDetailed(webView) == null
+
+    /**
+     * 抓一次当前网页并上报。
+     * @return null 表示成功；非 null 是失败原因（直接显示给她看）
+     */
+    suspend fun captureDetailed(webView: WebView?): String? {
         if (webView == null) {
             Log.w(TAG, "capture: webView is null")
-            return false
+            return "页面没建好"
         }
         return try {
             val url = webView.url ?: ""
@@ -45,14 +51,14 @@ object WebEyeReporter {
                 evaluateJavascriptBlocking(webView, buildExtractJs())
             }
             val text = decodeJsString(raw)
+            Log.i(TAG, "capture: url=$url title=$title rawLen=${raw?.length ?: -1} textLen=${text.length}")
             if (url.isBlank() && title.isBlank() && text.isBlank()) {
-                Log.w(TAG, "capture: nothing to report")
-                return false
+                return "页面空着，先输个网址"
             }
-            postWebLog(url, title, text)
+            if (postWebLogDetailed(url, title, text) == null) null else "传不出去"
         } catch (e: Exception) {
             Log.w(TAG, "capture error: ${e.message}")
-            false
+            "出错了"
         }
     }
 
@@ -82,6 +88,11 @@ object WebEyeReporter {
         } catch (e: Exception) {
             raw.trim('"')
         }
+    }
+
+    private fun postWebLogDetailed(url: String, title: String, text: String): String? {
+        val r = postWebLog(url, title, text)
+        return if (r) null else "传不出去"
     }
 
     private fun postWebLog(url: String, title: String, text: String): Boolean {

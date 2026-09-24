@@ -175,8 +175,8 @@ fun WebViewPage(url: String, content: String) {
                     IconButton(onClick = {
                         eyeHint = "在看…"
                         scope.launch {
-                            val ok = WebEyeReporter.capture(state.webView)
-                            eyeHint = if (ok) "他看到了" else "没抓到"
+                            val err = WebEyeReporter.captureDetailed(state.webView)
+                            eyeHint = err ?: "他看到了"
                         }
                     }) {
                         Icon(HugeIcons.Eye, contentDescription = "Let him see")
