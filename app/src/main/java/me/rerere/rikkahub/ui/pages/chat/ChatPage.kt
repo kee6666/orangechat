@@ -67,6 +67,7 @@ import me.rerere.hugeicons.stroke.HeartPulse
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import me.rerere.hugeicons.stroke.Ear
+import me.rerere.hugeicons.stroke.Earth
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.rikkahub.EarConsentActivity
 import me.rerere.hugeicons.stroke.Video01
@@ -296,6 +297,9 @@ private fun ChatPageContent(
                     },
                     onOpenEar = {
                         EarConsentActivity.open(context)
+                    },
+                    onOpenBrowser = {
+                        navController.navigate(Screen.WebView(url = "https://www.bing.com/"))
                     },
                     settings = setting,
                     conversation = conversation,
@@ -535,6 +539,7 @@ private fun TopBar(
     onOpenBoard: () -> Unit,
     onOpenHeart: () -> Unit,
     onOpenEar: () -> Unit,
+    onOpenBrowser: () -> Unit,
     onVideoCall: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -629,6 +634,14 @@ private fun TopBar(
                         onClick = {
                             folderExpanded = false
                             onOpenEar()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("浏览器") },
+                        leadingIcon = { Icon(HugeIcons.Earth, contentDescription = null) },
+                        onClick = {
+                            folderExpanded = false
+                            onOpenBrowser()
                         }
                     )
                 }
