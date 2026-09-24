@@ -8,12 +8,15 @@ package me.rerere.rikkahub.ui.pages.chat
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -35,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -63,6 +67,7 @@ import me.rerere.hugeicons.stroke.HeartPulse
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import me.rerere.hugeicons.stroke.Ear
+import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.rikkahub.EarConsentActivity
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.hugeicons.stroke.Voice
@@ -534,6 +539,7 @@ private fun TopBar(
 ) {
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
+    var folderExpanded by remember { mutableStateOf(false) }
     val titleState = useEditState<String> {
         onUpdateTitle(it)
     }
@@ -588,28 +594,44 @@ private fun TopBar(
             }
         },
         actions = {
-            IconButton(
-                onClick = {
-                    onOpenBoard()
+            Box {
+                IconButton(
+                    onClick = {
+                        folderExpanded = true
+                    }
+                ) {
+                    Icon(HugeIcons.Folder01, "Our Things")
                 }
-            ) {
-                Icon(HugeIcons.InLove, "Today Board")
-            }
 
-            IconButton(
-                onClick = {
-                    onOpenHeart()
+                DropdownMenu(
+                    expanded = folderExpanded,
+                    onDismissRequest = { folderExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("留言板") },
+                        leadingIcon = { Icon(HugeIcons.InLove, contentDescription = null) },
+                        onClick = {
+                            folderExpanded = false
+                            onOpenBoard()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("心潮") },
+                        leadingIcon = { Icon(HugeIcons.HeartPulse, contentDescription = null) },
+                        onClick = {
+                            folderExpanded = false
+                            onOpenHeart()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("耳朵") },
+                        leadingIcon = { Icon(HugeIcons.Ear, contentDescription = null) },
+                        onClick = {
+                            folderExpanded = false
+                            onOpenEar()
+                        }
+                    )
                 }
-            ) {
-                Icon(HugeIcons.HeartPulse, "Heart Tide")
-            }
-
-            IconButton(
-                onClick = {
-                    onOpenEar()
-                }
-            ) {
-                Icon(HugeIcons.Ear, "Ear")
             }
 
             IconButton(
