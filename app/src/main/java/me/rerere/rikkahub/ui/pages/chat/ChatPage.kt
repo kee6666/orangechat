@@ -545,6 +545,7 @@ private fun TopBar(
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
     var folderExpanded by remember { mutableStateOf(false) }
+    var showToyPanel by remember { mutableStateOf(false) }
     val titleState = useEditState<String> {
         onUpdateTitle(it)
     }
@@ -644,6 +645,14 @@ private fun TopBar(
                             onOpenBrowser()
                         }
                     )
+                    DropdownMenuItem(
+                        text = { Text("小怪兽") },
+                        leadingIcon = { Icon(HugeIcons.HeartPulse, contentDescription = null) },
+                        onClick = {
+                            folderExpanded = false
+                            showToyPanel = true
+                        }
+                    )
                 }
             }
 
@@ -679,6 +688,10 @@ private fun TopBar(
             }
         },
     )
+    if (showToyPanel) {
+        MonsterToyDialog(onDismiss = { showToyPanel = false })
+    }
+
     titleState.EditStateContent { title, onUpdate ->
         AlertDialog(
             onDismissRequest = {
