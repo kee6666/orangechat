@@ -114,6 +114,11 @@ object DeviceSenseReporter {
                             LocalIslandBrain.onScreenOff()
                         }
 
+                        // 本地驱动引擎：喂感知，让它下算十二驱动（第一版只算不说）
+                        try {
+                            LocalDriveBrain.onSense(context, screen == "on", pkg)
+                        } catch (_: Exception) { }
+
                         // 亮屏事件：她刚拿起手机，允许触发（内容由VPS侧中性化）
                         if (screen == "on" && prevScreen == "off" &&
                             now - lastEventTs >= MIN_EVENT_INTERVAL_MS

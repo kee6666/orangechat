@@ -37,6 +37,7 @@ import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.service.DailySummaryService
 import me.rerere.rikkahub.data.service.DeviceSenseReporter
+import me.rerere.rikkahub.data.service.LocalDriveBrain
 import me.rerere.rikkahub.data.service.DeviceEventAiTriggerService
 import me.rerere.rikkahub.data.service.DeviceEventTrackingService
 import me.rerere.rikkahub.data.service.ProactiveMessageService
@@ -151,6 +152,9 @@ class RikkaHubApp : Application() {
 
         // Start device sense reporter (screen on/off + foreground app -> VPS /sense)
         DeviceSenseReporter.start(get<AppScope>(), applicationContext)
+
+        // 本地驱动引擎（心潮下沉版）：全本地下算，第一版只算不说
+        LocalDriveBrain.start(applicationContext)
 
         // Increment launch count
         incrementLaunchCount()

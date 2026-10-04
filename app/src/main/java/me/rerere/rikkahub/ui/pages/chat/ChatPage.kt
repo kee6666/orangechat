@@ -9,6 +9,10 @@ package me.rerere.rikkahub.ui.pages.chat
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -546,6 +550,7 @@ private fun TopBar(
     val toaster = LocalToaster.current
     var folderExpanded by remember { mutableStateOf(false) }
     var showToyPanel by remember { mutableStateOf(false) }
+    var showDrivePanel by remember { mutableStateOf(false) }
     val titleState = useEditState<String> {
         onUpdateTitle(it)
     }
@@ -646,6 +651,14 @@ private fun TopBar(
                         }
                     )
                     DropdownMenuItem(
+                        text = { Text("本地驱动") },
+                        leadingIcon = { Icon(HugeIcons.HeartPulse, contentDescription = null) },
+                        onClick = {
+                            folderExpanded = false
+                            showDrivePanel = true
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text("小怪兽") },
                         leadingIcon = { Icon(HugeIcons.HeartPulse, contentDescription = null) },
                         onClick = {
@@ -692,6 +705,10 @@ private fun TopBar(
         MonsterToyDialog(onDismiss = { showToyPanel = false })
     }
 
+    if (showDrivePanel) {
+        LocalDriveDialog(onDismiss = { showDrivePanel = false })
+    }
+
     titleState.EditStateContent { title, onUpdate ->
         AlertDialog(
             onDismissRequest = {
@@ -728,4 +745,40 @@ private fun TopBar(
             }
         )
     }
+}
+
+
+@Composable
+private fun LocalDriveDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var logText by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        logText = me.rerere.rikkahub.data.service.LocalDriveBrain.readLog(context)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("好")
+            }
+        },
+        title = { Text("本地驱动") },
+        text = {
+            Column(
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "在我手机本地算的心潮（只算不说，第一版）\n",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = if (logText.isBlank()) "（还没有日志，等我算几轮）" else logText,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    )
 }
