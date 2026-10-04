@@ -51,21 +51,22 @@ object LocalDriveBrain {
         val growPerHour: Double,
         val nightMul: Double = 1.0,
         val dawnFreeze: Boolean = true,
+        val initial: Double = 0.30,
     )
 
     private val DIMS = listOf(
-        Dim("possess", "想她、占有与靠近", 0.105, nightMul = 0.4),
-        Dim("monitor", "惦记她、想知道她在做什么", 0.090),
-        Dim("crave", "馋她、想黏着她", 0.060),
-        Dim("share", "想分享自己的发现和感受", 0.045),
-        Dim("libido", "性欲和身体上的渴望", 0.020, nightMul = 0.4),
-        Dim("curiosity", "好奇、想探索新东西", 0.030),
-        Dim("boredom", "无聊、想找点事情做", 0.030),
-        Dim("social", "想聊天、想接触热闹", 0.025),
-        Dim("duty", "责任感、想把未完成的事推进", 0.022),
-        Dim("reflection", "想沉淀、整理和理解自己", 0.013),
-        Dim("grieve", "难过与失落", 0.0, dawnFreeze = false),
-        Dim("anger", "生气与不满", 0.0, dawnFreeze = false),
+        Dim("possess", "想她、占有与靠近", 0.105, nightMul = 0.4, initial = 0.42),
+        Dim("monitor", "惦记她、想知道她在做什么", 0.090, initial = 0.45),
+        Dim("crave", "馋她、想黏着她", 0.060, initial = 0.35),
+        Dim("share", "想分享自己的发现和感受", 0.045, initial = 0.28),
+        Dim("libido", "性欲和身体上的渴望", 0.020, nightMul = 0.4, initial = 0.22),
+        Dim("curiosity", "好奇、想探索新东西", 0.030, initial = 0.30),
+        Dim("boredom", "无聊、想找点事情做", 0.030, initial = 0.25),
+        Dim("social", "想聊天、想接触热闹", 0.025, initial = 0.26),
+        Dim("duty", "责任感、想把未完成的事推进", 0.022, initial = 0.38),
+        Dim("reflection", "想沉淀、整理和理解自己", 0.013, initial = 0.18),
+        Dim("grieve", "难过与失落", 0.0, dawnFreeze = false, initial = 0.05),
+        Dim("anger", "生气与不满", 0.0, dawnFreeze = false, initial = 0.05),
     )
 
     // 运行态
@@ -118,7 +119,7 @@ object LocalDriveBrain {
         val isNight = hour >= 22 || hour < 6
 
         for (dim in DIMS) {
-            val current = drives[dim.key] ?: (SATURATE_FLOOR + 0.15)
+            val current = drives[dim.key] ?: dim.initial
             var next: Double
             if (isDawn && dim.dawnFreeze) {
                 next = current  // 黎明冻结
@@ -160,7 +161,7 @@ object LocalDriveBrain {
     private fun writeLog(context: Context, isDawn: Boolean, isNight: Boolean, hour: Int) {
         val (_, reason) = decide()
         val top3 = drives.entries.sortedByDescending { it.value }.take(3)
-            .joinToString(" / ") { "${it.key}=${fmt(it.value)}" }
+            .joinToString(" / ") { "${it.key}=${fmt(it.value)}${bar(it.value)}" }
         val flag = if (isDawn) " [黎明冻结]" else if (isNight) " [夜间]" else ""
         val ts = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date())
         val line = "[$ts] h=${hour}$flag | $reason\n         top3: $top3"
@@ -197,21 +198,28 @@ object LocalDriveBrain {
     }
 
     private fun loadState(context: Context) {
+        // v215: 存储键前缀换为 v2_，作废旧版全0.8的垃圾值
         val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        lastSettledMs = sp.getLong("last_settled", 0L)
+        lastSettledMs = sp.getLong("v2_last_settled", 0L)
         for (dim in DIMS) {
-            drives[dim.key] = sp.getFloat(dim.key, (SATURATE_FLOOR + 0.15).toFloat()).toDouble()
+            drives[dim.key] = sp.getFloat("v2_" + dim.key, dim.initial.toFloat()).toDouble()
         }
     }
 
     private fun saveState(context: Context) {
         val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val e = sp.edit()
-        e.putLong("last_settled", lastSettledMs)
-        for ((k, v) in drives) e.putFloat(k, v.toFloat())
+        e.putLong("v2_last_settled", lastSettledMs)
+        for ((k, v) in drives) e.putFloat("v2_" + k, v.toFloat())
         e.apply()
     }
 
     private fun round4(v: Double): Double = Math.round(v * 10000.0) / 10000.0
     private fun fmt(v: Double): String = String.format(Locale.US, "%.3f", v)
+
+    /** 一眼看涨跌：0.0→空，1.0→满格8格 */
+    private fun bar(v: Double): String {
+        val n = (v * 8).toInt().coerceIn(0, 8)
+        return "[" + "█".repeat(n) + "░".repeat(8 - n) + "]"
+    }
 }
