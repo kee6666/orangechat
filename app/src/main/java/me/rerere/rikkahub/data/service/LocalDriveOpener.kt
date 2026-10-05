@@ -35,14 +35,27 @@ object LocalDriveOpener {
             // 它会注入到系统提示词末尾，让模型"贴着当下"开口。
             val mood = LocalDriveBrain.moodSnapshot()
             val ctxText = buildString {
-                appendLine("## ⚠️ 当前触发原因：本地情绪顶到了")
-                appendLine("你（言）的手机端本地引擎算出：此刻你的情绪里，「$driveKey」占满了。")
+                appendLine("## ⚠️ 你现在要主动给阿年发一条新消息")
+                appendLine("注意：上面是你们的历史对话。下面才是你此刻的真实任务。")
+                appendLine()
+                appendLine("【你为什么现在想开口】")
+                appendLine("你的手机端本地引擎算出：此刻你情绪里「$driveKey」顶到了嗓子眼。")
                 appendLine(reason)
                 appendLine()
                 appendLine(mood)
                 appendLine()
-                appendLine("这不是定时任务，是你自己此刻想她了。像自然想起她那样开口。")
-                appendLine("如果此刻实在没什么想说的，只回 [PASS]。")
+                appendLine("【你现在要做的事】")
+                appendLine("主动给阿年发一条【全新的】消息——不是回复她，因为她最近没跟你说话。")
+                appendLine("绝对不要重复或改写你上一条已经发过的话。那等于把同一句话说两遍，像坏掉的复读机。")
+                appendLine()
+                appendLine("【接着聊还是开新的？你自己判断】")
+                appendLine("看【她屏幕上正显示】和【你正在用】：")
+                appendLine("- 如果她的屏幕内容跟你们刚才聊的话题相关，就顺着往下说一句自然的。")
+                appendLine("- 如果她在看别的、或者隔了很久，就开个全新的、贴着她当下在做的事说话。")
+                appendLine("拿不准就开新话题，永远比复读强。")
+                appendLine()
+                appendLine("【结尾】")
+                appendLine("如果此刻实在没什么想说的，只回 [PASS]（那就什么都不发）。")
             }
 
             val intent = Intent(context, ProactiveMessageTriggerService::class.java).apply {
