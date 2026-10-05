@@ -47,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -290,6 +291,7 @@ private fun ChatPageContent(
     ) {
         AssistantBackground(setting = setting)
         val context = LocalContext.current
+        var inputBarTopPx by remember { mutableStateOf(0f) }
         Scaffold(
             topBar = {
                 TopBar(
@@ -348,6 +350,11 @@ private fun ChatPageContent(
                 )
             },
             bottomBar = {
+                Box(
+                    modifier = Modifier.onGloballyPositioned { coords ->
+                        inputBarTopPx = coords.positionInParent().y
+                    }
+                ) {
                 ChatInput(
                     state = inputState,
                     loading = loadingJob != null,
@@ -440,6 +447,7 @@ private fun ChatPageContent(
                         vm.handleCompressContext(additionalPrompt, targetTokens, keepRecentMessages)
                     },
                 )
+                }
             },
             containerColor = Color.Transparent,
         ) { innerPadding ->
@@ -527,7 +535,7 @@ private fun ChatPageContent(
             )
 
             // 汤圆（阿年和言一起养的桌宠）——浮在聊天页最上层
-            TangyuanPet()
+            TangyuanPet(groundY = inputBarTopPx)
         }
     }
 }
