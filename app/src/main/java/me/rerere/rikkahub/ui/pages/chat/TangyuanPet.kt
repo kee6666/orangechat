@@ -186,7 +186,7 @@ fun TangyuanPet(
                     state = PetState.IDLE
                 }
             }
-            if (sleeping) zzPhase += dt * 0.9f
+            if (sleeping) zzPhase += dt * 0.22f
 
             if (dragging) {
                 bobPhase += dt * 9f
@@ -506,7 +506,8 @@ private fun DrawScope.drawFace(face: TangyuanFace, w: Float, h: Float, blink: Fl
             drawCircle(FACE_DARK, radius = w * 0.026f, center = Offset(w * 0.50f, mouthY))
         }
         TangyuanFace.SURPRISED -> {
-            eyes(round = true)
+            // 长条眼（跟普通一样，不瞪人）+ 圆嘴 O
+            eyes()
             drawCircle(FACE_DARK, radius = w * 0.030f, center = Offset(w * 0.50f, mouthY + h * 0.03f))
         }
         TangyuanFace.SAD -> {
