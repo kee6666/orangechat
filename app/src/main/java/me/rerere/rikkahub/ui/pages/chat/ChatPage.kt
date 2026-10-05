@@ -536,22 +536,15 @@ private fun ChatPageContent(
                 },
             )
 
-            // 汤圆（阿年和言一起养的桌宠）——浮在聊天页最上层
-            // 外包一层 Box，记录自己窗口 y，把地面换算成"相对本 Box"的坐标
+            // 汤圆（阿年和言一起养的桌宠）
+            // 关键：把它限制在 content 区（innerPadding）内，它的底边就是输入框顶部，
+            // 键盘弹起时 content 区自动变矮 → 汤圆天然跟随，无需任何坐标计算
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .onGloballyPositioned { coords ->
-                        petBoxTopPx = coords.positionInWindow().y
-                    }
+                    .padding(innerPadding)
             ) {
-                TangyuanPet(
-                    groundY = if (inputBarTopPx > 0f && petBoxTopPx > 0f) {
-                        inputBarTopPx - petBoxTopPx
-                    } else {
-                        0f
-                    },
-                )
+                TangyuanPet(groundY = 0f)
             }
         }
     }
