@@ -330,6 +330,17 @@ class ProactiveMessageService : KoinComponent {
 
         // 健康状态（Gadgetbridge）- 跳过，AI可通过工具自行查询
 
+        // ===== v218：本地心情注入 =====
+        // 阿年要的"本地化"：十二驱动算出的情绪 + 她屏幕上的内容，全在手机本地，
+        // 这里读进来一起喂给模型 —— 让开口"贴着当下"，而不是机械定时。
+        try {
+            val mood = me.rerere.rikkahub.data.service.LocalDriveBrain.moodSnapshot()
+            if (mood.isNotBlank()) {
+                sb.appendLine()
+                sb.appendLine(mood)
+            }
+        } catch (_: Exception) { }
+
         sb.appendLine()
         sb.appendLine("请根据以上上下文，以自然、关心、有趣的方式主动给用户发一条消息。")
         sb.appendLine()

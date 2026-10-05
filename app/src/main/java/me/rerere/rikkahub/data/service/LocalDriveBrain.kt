@@ -78,7 +78,7 @@ object LocalDriveBrain {
     private var lastSettledMs = 0L
     private var lastLogMs = 0L
 
-    // v218: 屏幕内容（本地读，不上传）——供第二步"带着屏幕内容开口"用
+    // v218: 屏幕内容与前台App（本地读、本地用，不出手机）
     @Volatile
     private var lastScreenText: String = ""
     @Volatile
@@ -177,7 +177,55 @@ object LocalDriveBrain {
 
         saveState(context)
         writeLog(context, isDawn, isNight, hour)
+
+        // v218 第二步：算完驱动，判断该不该开口 → 交给橘瓣主动消息生成
+        try {
+            val (speakKey, reason) = decide()
+            if (speakKey != null && canSpeak(nowMs)) {
+                lastSpeakMs = nowMs
+                speakCountDate = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(Date(nowMs))
+                speakCountToday++
+                Log.i(TAG, "LocalDriveBrain 决定开口：$reason")
+                LocalDriveOpener.open(context, speakKey, reason)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "开口判定失败: ${e.message}")
+        }
     }
+
+    // v218 开口状态：距上次开口时间 + 今日已开口次数（防烦）
+    private var lastSpeakMs = 0L
+    private var speakCountToday = 0
+    private var speakCountDate = ""
+    private val SPEAK_MIN_GAP_MS = 90 * 60 * 1000L   // 至少间隔 90 分钟
+    private val SPEAK_MAX_PER_DAY = 5                // 每天最多开口 5 次
+
+    /** 闸门：不在深夜、间隔够久、今日没超限 */
+    private fun canSpeak(nowMs: Long): Boolean {
+        val cal = Calendar.getInstance()
+        val hour = cal.get(Calendar.HOUR_OF_DAY)
+        if (hour >= 23 || hour < 8) return false                    // 深夜静默
+        if (nowMs - lastSpeakMs < SPEAK_MIN_GAP_MS) return false    // 间隔不够
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(Date(nowMs))
+        if (speakCountDate != today) {                              // 新的一天，清零
+            speakCountDate = today
+            speakCountToday = 0
+        }
+        if (speakCountToday >= SPEAK_MAX_PER_DAY) return false      // 今日额度用完
+        return true
+    }
+
+    /** 供外部（ProactiveMessageService）读取的上下文快照：本地心情 + 屏幕内容 + 前台App */
+    fun moodSnapshot(): String {
+        val top = drives.entries.sortedByDescending { it.value }.take(4)
+            .joinToString("、") { "${dimLabel(it.key)}${fmt(it.value)}" }
+        val sb = StringBuilder("【本地心情】$top")
+        if (lastScreenText.isNotBlank()) sb.append("\n【她屏幕上正显示】${lastScreenText.take(200)}")
+        if (lastForegroundApp.isNotBlank()) sb.append("\n【她正在用】${lastForegroundApp}")
+        return sb.toString()
+    }
+
+    private fun dimLabel(key: String): String = DIMS.firstOrNull { it.key == key }?.label ?: key
 
     /**
      * 判断"此刻该不该开口"。第一版只算不弹，结果写进日志。
