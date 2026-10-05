@@ -78,6 +78,14 @@ object LocalDriveBrain {
     private var lastSettledMs = 0L
     private var lastLogMs = 0L
 
+    // v218: 屏幕内容（本地读，不上传）——供第二步"带着屏幕内容开口"用
+    @Volatile
+    private var lastScreenText: String = ""
+    @Volatile
+    private var lastForegroundPkg: String = ""
+    @Volatile
+    private var lastForegroundApp: String = ""
+
     private var heartbeatStarted = false
 
     /** 启动。由 RikkaHubApp.onCreate 调用 */
@@ -117,8 +125,12 @@ object LocalDriveBrain {
      * 感知回调：DeviceSenseReporter 每次状态变化喂进来。
      * 这里负责节流 + 省电闸，再决定要不要算。
      */
-    fun onSense(context: Context, screenOn: Boolean, pkg: String) {
+    fun onSense(context: Context, screenOn: Boolean, pkg: String, screenText: String = "", app: String = "") {
         if (!running) return
+        // v218: 记住最近一次屏幕内容与前台App（本地内存，不落盘不外传）
+        if (screenText.isNotBlank()) lastScreenText = screenText
+        lastForegroundPkg = pkg
+        if (app.isNotBlank()) lastForegroundApp = app
         val now = System.currentTimeMillis()
 
         // 省电闸：低电停摆

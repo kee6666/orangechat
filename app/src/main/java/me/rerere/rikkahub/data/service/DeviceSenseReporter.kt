@@ -115,8 +115,11 @@ object DeviceSenseReporter {
                         }
 
                         // 本地驱动引擎：喂感知，让它下算十二驱动（第一版只算不说）
+                        // v218: 连屏幕内容一起喂——本地读、本地用，不出手机
                         try {
-                            LocalDriveBrain.onSense(context, screen == "on", pkg)
+                            val screenText = if (ScreenContentReaderService.enabled)
+                                ScreenContentReaderService.lastSnapshot.take(300) else ""
+                            LocalDriveBrain.onSense(context, screen == "on", pkg, screenText, app)
                         } catch (_: Exception) { }
 
                         // 亮屏事件：她刚拿起手机，允许触发（内容由VPS侧中性化）
