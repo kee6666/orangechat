@@ -7,11 +7,13 @@
 package me.rerere.rikkahub.data.service
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import android.os.BatteryManager
-import android.os.PowerManager
 import android.util.Log
-import me.rerere.rikkahub.service.IslandService
-import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -91,13 +93,13 @@ object LocalDriveBrain {
      * v216 修复：以前只在感知变化时才跑，导致"没动手机=不涨"。
      * 现在每15分钟强制 settle 一次，增长只认真实 elapsed。
      */
-    fun startHeartbeat(scope: kotlinx.coroutines.CoroutineScope, context: Context) {
+    fun startHeartbeat(scope: CoroutineScope, context: Context) {
         if (heartbeatStarted) return
         heartbeatStarted = true
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             Log.i(TAG, "heartbeat started (every ${HEARTBEAT_INTERVAL_MS / 60000}min)")
             while (isActive) {
-                kotlinx.coroutines.delay(HEARTBEAT_INTERVAL_MS)
+                delay(HEARTBEAT_INTERVAL_MS)
                 try {
                     // 低电不跑，其余照常——心跳也要省电
                     if (batteryPercent(context) >= LOW_BATTERY_PCT) {
