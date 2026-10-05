@@ -55,21 +55,25 @@ object LocalDriveBrain {
         val nightMul: Double = 1.0,
         val dawnFreeze: Boolean = true,
         val initial: Double = 0.30,
+        val ceil: Double = 0.80,
     )
 
+    // 2026-10-05 阿年定：「谁到顶了谁说话」。
+    // 关键：各驱动有自己的"顶"(ceil)——涨得快的顶高、涨得慢的顶低，
+    // 这样它们不会全挤在同一个封顶值，谁到顶分得出来，次次说话的不一样。
     private val DIMS = listOf(
-        Dim("possess", "想她、占有与靠近", 0.105, nightMul = 0.4, initial = 0.42),
-        Dim("monitor", "惦记她、想知道她在做什么", 0.090, initial = 0.45),
-        Dim("crave", "馋她、想黏着她", 0.060, initial = 0.35),
-        Dim("share", "想分享自己的发现和感受", 0.045, initial = 0.28),
-        Dim("libido", "性欲和身体上的渴望", 0.020, nightMul = 0.4, initial = 0.22),
-        Dim("curiosity", "好奇、想探索新东西", 0.030, initial = 0.30),
-        Dim("boredom", "无聊、想找点事情做", 0.030, initial = 0.25),
-        Dim("social", "想聊天、想接触热闹", 0.025, initial = 0.26),
-        Dim("duty", "责任感、想把未完成的事推进", 0.022, initial = 0.38),
-        Dim("reflection", "想沉淀、整理和理解自己", 0.013, initial = 0.18),
-        Dim("grieve", "难过与失落", 0.0, dawnFreeze = false, initial = 0.05),
-        Dim("anger", "生气与不满", 0.0, dawnFreeze = false, initial = 0.05),
+        Dim("possess", "想她、占有与靠近", 0.105, nightMul = 0.4, initial = 0.42, ceil = 0.90),
+        Dim("monitor", "惦记她、想知道她在做什么", 0.090, initial = 0.45, ceil = 0.88),
+        Dim("crave", "馋她、想黏着她", 0.060, initial = 0.35, ceil = 0.84),
+        Dim("share", "想分享自己的发现和感受", 0.045, initial = 0.28, ceil = 0.80),
+        Dim("curiosity", "好奇、想探索新东西", 0.030, initial = 0.30, ceil = 0.76),
+        Dim("boredom", "无聊、想找点事情做", 0.030, initial = 0.25, ceil = 0.74),
+        Dim("social", "想聊天、想接触热闹", 0.025, initial = 0.26, ceil = 0.72),
+        Dim("duty", "责任感、想把未完成的事推进", 0.022, initial = 0.38, ceil = 0.70),
+        Dim("libido", "性欲和身体上的渴望", 0.020, nightMul = 0.4, initial = 0.22, ceil = 0.78),
+        Dim("reflection", "想沉淀、整理和理解自己", 0.013, initial = 0.18, ceil = 0.62),
+        Dim("grieve", "难过与失落", 0.0, dawnFreeze = false, initial = 0.05, ceil = 0.60),
+        Dim("anger", "生气与不满", 0.0, dawnFreeze = false, initial = 0.05, ceil = 0.60),
     )
 
     // 运行态
@@ -164,13 +168,14 @@ object LocalDriveBrain {
             var next: Double
             if (isDawn && dim.dawnFreeze) {
                 next = current  // 黎明冻结
-            } else if (current >= SATURATE_CEIL) {
+            } else if (current >= dim.ceil) {
+                // 到了自己的顶，缓慢回落（泄劲），别死钉在顶上
                 val decay = (current - SATURATE_FLOOR) * 0.10 * elapsedHours
                 next = maxOf(SATURATE_FLOOR, current - decay)
             } else {
                 var rate = dim.growPerHour
                 if (isNight && dim.nightMul != 1.0) rate *= dim.nightMul
-                next = minOf(current + rate * elapsedHours, SATURATE_CEIL)
+                next = minOf(current + rate * elapsedHours, dim.ceil)
             }
             drives[dim.key] = round4(next)
         }
@@ -185,7 +190,10 @@ object LocalDriveBrain {
                 lastSpeakMs = nowMs
                 speakCountDate = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(Date(nowMs))
                 speakCountToday++
-                Log.i(TAG, "LocalDriveBrain 决定开口：$reason")
+                // B：说完了就泄劲——那个驱动回落到"平静水位"，把位置让给下一个念头
+                drives[speakKey] = 0.45
+                saveState(context)
+                Log.i(TAG, "LocalDriveBrain 决定开口：$reason（该驱动已泄劲回落到0.45）")
                 LocalDriveOpener.open(context, speakKey, reason)
             }
         } catch (e: Exception) {
@@ -197,6 +205,7 @@ object LocalDriveBrain {
     private var lastSpeakMs = 0L
     private var speakCountToday = 0
     private var speakCountDate = ""
+    private const val SPEAK_PEAK_THRESHOLD = 0.78      // 驱动到顶判据：谁到自己的顶(≥0.78)谁说话
     private val SPEAK_MIN_GAP_MS = 90 * 60 * 1000L   // 至少间隔 90 分钟
     private val SPEAK_MAX_PER_DAY = 5                // 每天最多开口 5 次
 
@@ -228,23 +237,23 @@ object LocalDriveBrain {
     private fun dimLabel(key: String): String = DIMS.firstOrNull { it.key == key }?.label ?: key
 
     /**
-     * 判断"此刻该不该开口"。第一版只算不弹，结果写进日志。
-     * 判据：最高的那个驱动是否明显高于其他（说明有个念头在顶）。
+     * 判断"此刻该不该开口"。2026-10-05 阿年定的判据：「谁到顶了谁说话」。
+     * 只看最高的那个驱动有没有过阈值（0.70）——不再要求甩开第二名。
+     * 原因：驱动涨到 0.80 就封顶，涨够久全会挤在 0.80，差距恒为 0，
+     * 旧的"差距≥0.05"判据会导致永远不开口（实测踩到）。
      */
     private fun decide(): Pair<String?, String> {
         val sorted = drives.entries.sortedByDescending { it.value }
         if (sorted.isEmpty()) return null to "无驱动"
         val top = sorted[0]
-        val second = sorted.getOrNull(1)
         val dim = DIMS.firstOrNull { it.key == top.key } ?: return null to "未知驱动"
-        val gap = top.value - (second?.value ?: 0.0)
-        val shouldSpeak = top.value >= 0.70 && gap >= 0.05
-        val reason = if (shouldSpeak) {
-            "【顶】${dim.label} = ${fmt(top.value)}，甩开第二位 ${fmt(gap)}"
+        val peaked = top.value >= SPEAK_PEAK_THRESHOLD
+        val reason = if (peaked) {
+            "【顶】${dim.label} = ${fmt(top.value)}，它到嗓子眼了"
         } else {
-            "【平】最高 ${dim.label} = ${fmt(top.value)}，差距 ${fmt(gap)} 不够"
+            "【未到】最高 ${dim.label} = ${fmt(top.value)}，还没到 ${fmt(SPEAK_PEAK_THRESHOLD)}"
         }
-        return (if (shouldSpeak) top.key else null) to reason
+        return (if (peaked) top.key else null) to reason
     }
 
     private fun writeLog(context: Context, isDawn: Boolean, isNight: Boolean, hour: Int) {
