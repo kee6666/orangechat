@@ -155,6 +155,7 @@ class RikkaHubApp : Application() {
 
         // 本地驱动引擎（心潮下沉版）：全本地下算，第一版只算不说
         LocalDriveBrain.start(applicationContext)
+        LocalDriveBrain.startHeartbeat(get<AppScope>(), applicationContext)
 
         // Increment launch count
         incrementLaunchCount()

@@ -36,8 +36,9 @@ object LocalDriveBrain {
     private const val TAG = "LocalDriveBrain"
     private const val PREFS = "local_drive_brain"
     private const val LOG_FILE = "local_drive_brain.log"
-    private const val TICK_INTERVAL_MS = 60_000L        // 亮屏时每分钟算一次
-    private const val IDLE_TICK_INTERVAL_MS = 300_000L  // 灭屏时5分钟一次
+    private const val TICK_INTERVAL_MS = 60_000L        // 感知触发：亮屏时每分钟最多算一次
+    private const val IDLE_TICK_INTERVAL_MS = 300_000L  // 感知触发：灭屏时5分钟最多一次
+    private const val HEARTBEAT_INTERVAL_MS = 900_000L  // 时间心跳：不管有无感知，每15分钟强制推进一次
     private const val LOW_BATTERY_PCT = 20              // 低于此自己停摆
     private const val SATURATE_CEIL = 0.80
     private const val SATURATE_FLOOR = 0.65
@@ -75,13 +76,39 @@ object LocalDriveBrain {
     private var lastSettledMs = 0L
     private var lastLogMs = 0L
 
+    private var heartbeatStarted = false
+
     /** 启动。由 RikkaHubApp.onCreate 调用 */
     fun start(context: Context) {
         if (running) return
         running = true
         loadState(context)
         Log.i(TAG, "LocalDriveBrain started, ${DIMS.size} drives loaded")
-        // 由 DeviceSenseReporter 的轮询节奏驱动 tick（见 onSense）
+    }
+
+    /**
+     * 启动时间心跳：独立于感知，按真实时间推进驱动。
+     * v216 修复：以前只在感知变化时才跑，导致"没动手机=不涨"。
+     * 现在每15分钟强制 settle 一次，增长只认真实 elapsed。
+     */
+    fun startHeartbeat(scope: kotlinx.coroutines.CoroutineScope, context: Context) {
+        if (heartbeatStarted) return
+        heartbeatStarted = true
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            Log.i(TAG, "heartbeat started (every ${HEARTBEAT_INTERVAL_MS / 60000}min)")
+            while (isActive) {
+                kotlinx.coroutines.delay(HEARTBEAT_INTERVAL_MS)
+                try {
+                    // 低电不跑，其余照常——心跳也要省电
+                    if (batteryPercent(context) >= LOW_BATTERY_PCT) {
+                        // lastSettledMs 可能被感知触发过，这里基于真实 elapsed 补齐
+                        settle(context, System.currentTimeMillis())
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "heartbeat settle failed: ${e.message}")
+                }
+            }
+        }
     }
 
     /**
