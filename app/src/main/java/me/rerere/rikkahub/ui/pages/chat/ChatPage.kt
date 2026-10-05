@@ -525,6 +525,9 @@ private fun ChatPageContent(
                     vm.saveConversationAsync()
                 },
             )
+
+            // 汤圆（阿年和言一起养的桌宠）——浮在聊天页最上层
+            TangyuanPet()
         }
     }
 }
