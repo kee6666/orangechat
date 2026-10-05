@@ -104,6 +104,8 @@ fun TangyuanPet(
 
     var stretchY by remember { mutableFloatStateOf(1f) }
     var dragging by remember { mutableStateOf(false) }
+    // 常驻回弹动画器：每次复用，先 stop 再 animateTo，绝不 new（防僵）
+    val stretchAnim = remember { Animatable(1f, Float.VectorConverter) }
 
     var state by remember { mutableStateOf(PetState.IDLE) }
     var walkDir by remember { mutableFloatStateOf(1f) }
@@ -226,6 +228,7 @@ fun TangyuanPet(
                                 dragging = true
                                 velY = 0f
                                 stretchY = 1f
+                                scope.launch { stretchAnim.stop() }
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
@@ -239,10 +242,9 @@ fun TangyuanPet(
                             },
                             onDragEnd = {
                                 dragging = false
-                                val startV = stretchY
                                 scope.launch {
-                                    val a = Animatable(startV, Float.VectorConverter)
-                                    a.animateTo(
+                                    stretchAnim.snapTo(stretchY)
+                                    stretchAnim.animateTo(
                                         1f,
                                         animationSpec = spring(SPRING_STIFFNESS, SPRING_DAMPING),
                                     ) { stretchY = value }

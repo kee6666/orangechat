@@ -293,6 +293,7 @@ private fun ChatPageContent(
         AssistantBackground(setting = setting)
         val context = LocalContext.current
         var inputBarTopPx by remember { mutableStateOf(0f) }
+        var petBoxTopPx by remember { mutableStateOf(0f) }
         Scaffold(
             topBar = {
                 TopBar(
@@ -536,7 +537,22 @@ private fun ChatPageContent(
             )
 
             // 汤圆（阿年和言一起养的桌宠）——浮在聊天页最上层
-            TangyuanPet(groundY = inputBarTopPx)
+            // 外包一层 Box，记录自己窗口 y，把地面换算成"相对本 Box"的坐标
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onGloballyPositioned { coords ->
+                        petBoxTopPx = coords.positionInWindow().y
+                    }
+            ) {
+                TangyuanPet(
+                    groundY = if (inputBarTopPx > 0f && petBoxTopPx > 0f) {
+                        inputBarTopPx - petBoxTopPx
+                    } else {
+                        0f
+                    },
+                )
+            }
         }
     }
 }
