@@ -1,13 +1,14 @@
 /*
- * 汤圆 (Tangyuan) —— 阿年和言一起养的桌宠 · v7
+ * 汤圆 (Tangyuan) v8
  *
- * v7 关键修正：
- *  1. 光球：在"正圆"坐标系里画渐变，再 scale 压成椭圆 → 渐变永远盖满，右下角不缺
- *  2. 球体 = 实心橘 + 白色内芯 + 一圈外发光（照 PS 光球做法，不是整体糊）
- *  3. 拖动时锁住形变（不再被重力覆盖），拎起变水滴
- *  4. 地面取 min(输入框顶部, 屏高-安全带)，键盘弹起也不会飞出屏幕
- *  5. 落地压扁 → 回弹，弹簧更软
- *  6. 待机/走路状态机
+ * v8 修正（阿年实测反馈）：
+ *  1. 拖动时【完全暂停】物理循环：不重力、不回归。形变只由手控制。
+ *     松手才恢复物理。→ 修"落地后再提没反应"
+ *  2. 提起形变方向修正：往上提 = 竖着拉长（水滴），往下甩 = 竖着压扁
+ *     用"累积 + 夹紧"避免溢出。→ 修"提两次就扁了变不回来"
+ *  3. 挤压不再反向放大（scaleX 只用温和的补偿）；不加无谓变形。→ 修"莫名变扁"
+ *  4. 地面用【相对屏幕底部往上固定距离】，键盘弹起也不消失。
+ *  5. 球体改通透发光：更亮、内层光晕、边缘辉光，不是一块实心橘。
  */
 package me.rerere.rikkahub.ui.pages.chat
 
@@ -39,12 +40,12 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -72,13 +73,15 @@ private const val SPRING_STIFFNESS = 170f
 private const val SPRING_DAMPING = 0.68f
 private const val WALK_SPEED = 58f
 private const val WALK_BOB_AMP = 2.4f
+private const val BOTTOM_MARGIN = 120f   // dp：地面离屏幕底部的高度
 
-// ── 配色 ──
-private val SOLID_ORANGE = Color(0xFFFF9A3C)
-private val SHADE_ORANGE = Color(0xFFF07A1E)
-private val GLOW_ORANGE = Color(0xFFFFB057)
-private val CORE_WHITE = Color(0xFFFFF6EA)
-private val FACE_DARK = Color(0xFF8A4212)
+// ── 配色（更通透，偏发光）──
+private val GLOW_OUT = Color(0xFFFFC77A)
+private val BODY_LIGHT = Color(0xFFFFC978)
+private val BODY_MID = Color(0xFFFFA03C)
+private val BODY_DEEP = Color(0xFFF5811A)
+private val INNER_GLOW = Color(0xFFFFF0D2)
+private val FACE_DARK = Color(0xFF95501C)
 
 @Composable
 fun TangyuanPet(
@@ -92,7 +95,7 @@ fun TangyuanPet(
     val bodyWpx = with(density) { BODY_W.dp.toPx() }
     val bodyHpx = with(density) { BODY_H.dp.toPx() }
     val bobAmpPx = with(density) { WALK_BOB_AMP.dp.toPx() }
-    val safeGapPx = with(density) { 150.dp.toPx() }
+    val bottomMarginPx = with(density) { BOTTOM_MARGIN.dp.toPx() }
 
     var containerW by remember { mutableFloatStateOf(0f) }
     var containerH by remember { mutableFloatStateOf(0f) }
@@ -102,8 +105,8 @@ fun TangyuanPet(
     val posY = remember { Animatable(0f) }
     var velY by remember { mutableFloatStateOf(0f) }
 
-    // 形变：squash 横/竖 比例。1 = 不变形
-    var scaleYFactor by remember { mutableFloatStateOf(1f) }
+    // 形变：拉伸系数。1 = 不变形；>1 竖长（拎起）；<1 竖扁（甩下/落地）
+    var stretchY by remember { mutableFloatStateOf(1f) }
     var dragging by remember { mutableStateOf(false) }
 
     var state by remember { mutableStateOf(PetState.IDLE) }
@@ -120,13 +123,9 @@ fun TangyuanPet(
         label = "breathe",
     )
 
-    // 地面：输入框顶部与安全线取小值（防止键盘弹起时被推到屏幕外）
-    val groundTop = run {
-        val g1 = if (groundY > 0f) groundY else containerH
-        val g2 = containerH - safeGapPx
-        minOf(g1, g2).coerceAtLeast(bodyHpx * 2f)
-    }
-    val restTopY = groundTop - bodyHpx
+    // 地面：钉在屏幕底部往上固定距离（键盘弹起时容器变矮也不消失）
+    val groundTopY = (containerH - bottomMarginPx).coerceAtLeast(bodyHpx * 1.4f)
+    val restTopY = groundTopY - bodyHpx
 
     LaunchedEffect(containerW) {
         if (!ready && containerW > 0f) {
@@ -136,6 +135,7 @@ fun TangyuanPet(
         }
     }
 
+    // ── 物理主循环（拖动时整段跳过）──
     LaunchedEffect(ready) {
         if (!ready) return@LaunchedEffect
         var last = 0L
@@ -145,39 +145,45 @@ fun TangyuanPet(
             val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.05f)
             last = now
 
-            if (!dragging) {
-                velY += GRAVITY * dt
-                var newY = posY.value + velY * dt
-                var newX = posX.value +
-                    (if (state == PetState.WALK) walkDir * WALK_SPEED else 0f) * dt
+            if (dragging) {
+                // 拖动中：物理完全停手，形变由手控制
+                bobPhase += dt * 9f
+                continue
+            }
 
-                val floor = restTopY
-                if (newY >= floor) {
-                    newY = floor
-                    if (velY > 300f) {
-                        velY = -velY * RESTITUTION
-                        scaleYFactor = 0.66f          // 落地压扁
-                    } else {
-                        velY = 0f
-                    }
-                }
-                if (newY < 0f) { newY = 0f; if (velY < 0f) velY = 0f }
+            // 重力
+            velY += GRAVITY * dt
+            var newY = posY.value + velY * dt
+            var newX = posX.value +
+                (if (state == PetState.WALK) walkDir * WALK_SPEED else 0f) * dt
 
-                if (newX < bodyWpx * 0.3f) { newX = bodyWpx * 0.3f; walkDir = 1f }
-                if (newX > containerW - bodyWpx * 1.3f) {
-                    newX = containerW - bodyWpx * 1.3f; walkDir = -1f
-                }
-
-                posX.snapTo(newX)
-                posY.snapTo(newY)
-
-                // 形变回归 1（非拖动态）
-                if (velY > 100f) {
-                    scaleYFactor = 1f + (velY / 2600f).coerceIn(0f, 0.40f)
+            val floor = restTopY
+            if (newY >= floor) {
+                newY = floor
+                if (velY > 320f) {
+                    velY = -velY * RESTITUTION
+                    stretchY = 0.72f            // 落地压扁
                 } else {
-                    scaleYFactor += (1f - scaleYFactor) * (dt * 9f)
-                    if (abs(scaleYFactor - 1f) < 0.008f) scaleYFactor = 1f
+                    velY = 0f
                 }
+            }
+            if (newY < 0f) { newY = 0f; if (velY < 0f) velY = 0f }
+
+            if (newX < bodyWpx * 0.3f) { newX = bodyWpx * 0.3f; walkDir = 1f }
+            if (newX > containerW - bodyWpx * 1.3f) {
+                newX = containerW - bodyWpx * 1.3f; walkDir = -1f
+            }
+
+            posX.snapTo(newX)
+            posY.snapTo(newY)
+
+            // 形变回归 1（越接近越慢，柔和收敛）
+            if (velY > 110f) {
+                // 下落：竖着拉长（水滴/下坠感）
+                stretchY = (1f + velY / 3000f).coerceAtMost(1.35f)
+            } else {
+                stretchY += (1f - stretchY) * (dt * 10f)
+                if (abs(stretchY - 1f) < 0.006f) stretchY = 1f
             }
 
             bobPhase += dt * 9f
@@ -213,16 +219,18 @@ fun TangyuanPet(
                     }
                     .size(width = BODY_W.dp, height = BODY_H.dp)
                     .graphicsLayer {
-                        val sy = scaleYFactor * (if (dragging || state == PetState.WALK) 1f else idleS)
-                        val sx = 1f / sqrt(sy.coerceAtLeast(0.3f))
-                        scaleX = sx
-                        scaleY = sy
+                        val sy = stretchY * (if (dragging || state == PetState.WALK) 1f else idleS)
+                        // 温和补偿：只在竖着拉长时稍微收窄，收窄幅度最多 12%
+                        val sx = 1f - (sy - 1f) * 0.28f
+                        scaleX = sx.coerceIn(0.88f, 1.12f)
+                        scaleY = sy.coerceIn(0.70f, 1.40f)
                     }
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = {
                                 dragging = true
                                 velY = 0f
+                                stretchY = 1f
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
@@ -230,28 +238,26 @@ fun TangyuanPet(
                                     posX.snapTo(posX.value + dragAmount.x)
                                     posY.snapTo(posY.value + dragAmount.y)
                                 }
-                                // 拎起来 → 水滴状：竖直拖动时竖着拉长
-                                val dx = dragAmount.x
+                                // 向上提（dy<0）→ 竖着拉长；向下甩（dy>0）→ 竖着压扁
+                                // 用 dy 判断方向，幅度直接映射，不累积
                                 val dy = dragAmount.y
-                                scaleYFactor = when {
-                                    abs(dy) > abs(dx) -> (1f + dy / 100f).coerceIn(0.7f, 1.45f)
-                                    else -> (1f - abs(dx) / 260f).coerceIn(0.72f, 1f)
-                                }
+                                val target = 1f - dy / 110f
+                                stretchY = target.coerceIn(0.72f, 1.45f)
                             },
                             onDragEnd = {
                                 dragging = false
-                                val startV = scaleYFactor
+                                val startV = stretchY
                                 scope.launch {
                                     val a = Animatable(startV, Float.VectorConverter)
                                     a.animateTo(
                                         1f,
                                         animationSpec = spring(SPRING_STIFFNESS, SPRING_DAMPING),
-                                    ) { scaleYFactor = value }
+                                    ) { stretchY = value }
                                 }
                             },
                             onDragCancel = {
                                 dragging = false
-                                scaleYFactor = 1f
+                                stretchY = 1f
                             },
                         )
                     }
@@ -261,69 +267,77 @@ fun TangyuanPet(
     }
 }
 
-/**
- * 画汤圆：在"正圆"里画所有渐变，再压成椭圆 → 渐变永远盖满
- */
+/** 画汤圆：正圆里画渐变 → 压成椭圆（渐变永远盖满） */
 private fun DrawScope.drawTangyuan(face: TangyuanFace) {
     val w = size.width
     val h = size.height
     val cx = w / 2f
     val cy = h / 2f
-    // 用一个正圆的半径来画渐变，再缩放到椭圆
-    val circleR = h / 2f
+    val r = h / 2f
+    val xScale = (w / 2f) / r
 
-    // ① 外发光（正圆径向渐变，透明收尾）—— 单独画，保持圆
+    // ① 外发光（正圆，柔和散开）
     drawCircle(
-        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+        brush = Brush.radialGradient(
             colors = listOf(
-                GLOW_ORANGE.copy(alpha = 0.34f),
-                GLOW_ORANGE.copy(alpha = 0.16f),
-                GLOW_ORANGE.copy(alpha = 0f),
+                GLOW_OUT.copy(alpha = 0.42f),
+                GLOW_OUT.copy(alpha = 0.18f),
+                GLOW_OUT.copy(alpha = 0f),
             ),
             center = Offset(cx, cy),
-            radius = circleR * 1.65f,
+            radius = r * 1.75f,
         ),
-        radius = circleR * 1.65f,
+        radius = r * 1.75f,
         center = Offset(cx, cy),
     )
 
-    // ② 球体：在正圆里画实的渐变，再横向拉成椭圆
-    val xScale = (w / 2f) / circleR
+    // ② 球体：通透发光感（正圆里画，再压椭圆）
     scale(scaleX = xScale, scaleY = 1f, pivot = Offset(cx, cy)) {
-        // 实心球：橘色，左上稍亮、右下稍暗（轻微，不糊）
+        // 主体：中心偏左上亮，向外橘→深橘，但保持"发光通透"
         drawCircle(
-            brush = androidx.compose.ui.graphics.Brush.radialGradient(
+            brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0xFFFFA550),
-                    SOLID_ORANGE,
-                    SHADE_ORANGE,
+                    INNER_GLOW,
+                    BODY_LIGHT,
+                    BODY_MID,
+                    BODY_DEEP,
                 ),
-                center = Offset(cx - circleR * 0.28f, cy - circleR * 0.30f),
-                radius = circleR * 1.30f,
+                center = Offset(cx - r * 0.30f, cy - r * 0.32f),
+                radius = r * 1.28f,
             ),
-            radius = circleR,
+            radius = r,
+            center = Offset(cx, cy),
+        )
+        // 内层亮核（让它"发光"而不是"实心"）
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    INNER_GLOW.copy(alpha = 0.95f),
+                    INNER_GLOW.copy(alpha = 0.35f),
+                    INNER_GLOW.copy(alpha = 0f),
+                ),
+                center = Offset(cx - r * 0.34f, cy - r * 0.38f),
+                radius = r * 0.62f,
+            ),
+            radius = r * 0.62f,
+            center = Offset(cx - r * 0.34f, cy - r * 0.38f),
+        )
+        // 边缘辉光（轮廓光，让球有"亮边"）
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    GLOW_OUT.copy(alpha = 0.30f),
+                    GLOW_OUT.copy(alpha = 0f),
+                ),
+                center = Offset(cx, cy),
+                radius = r * 1.05f,
+            ),
+            radius = r * 1.05f,
             center = Offset(cx, cy),
         )
     }
 
-    // ③ 内芯高光：正圆画，再压
-    scale(scaleX = xScale, scaleY = 1f, pivot = Offset(cx, cy)) {
-        drawCircle(
-            brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                colors = listOf(
-                    CORE_WHITE.copy(alpha = 0.95f),
-                    CORE_WHITE.copy(alpha = 0.35f),
-                    CORE_WHITE.copy(alpha = 0f),
-                ),
-                center = Offset(cx - circleR * 0.34f, cy - circleR * 0.40f),
-                radius = circleR * 0.52f,
-            ),
-            radius = circleR * 0.52f,
-            center = Offset(cx - circleR * 0.34f, cy - circleR * 0.40f),
-        )
-    }
-
-    // ④ 表情（在椭圆坐标里）
     drawFace(face, w, h)
 }
 
