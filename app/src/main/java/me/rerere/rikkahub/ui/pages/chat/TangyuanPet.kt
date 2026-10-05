@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -38,6 +40,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -98,89 +101,77 @@ fun TangyuanPet(
     val bodyWpx = with(density) { BODY_W.dp.toPx() }
     val bodyHpx = with(density) { BODY_H.dp.toPx() }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val maxW = constraints.maxWidth.toFloat()
-            val maxH = constraints.maxHeight.toFloat()
-            // 初始位置：右下角，停在输入框上方（由外层给 padding，这里给个合理默认）
-            val baseX = maxW - bodyWpx * 2.2f
-            val baseY = maxH - bodyHpx * 3.0f
-
-            Box(
-                modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            (baseX + offsetX.value).roundToInt(),
-                            (baseY + offsetY.value).roundToInt(),
-                        )
-                    }
-                    .size(width = BODY_W.dp, height = BODY_H.dp)
-                    .graphicsLayer {
-                        // 拖动时按速度拉伸/挤压
-                        val s = 1f + deform
-                        scaleX = s * (if (dragging) 1f else idleScale)
-                        scaleY = (1f / sqrt(s.coerceAtLeast(0.2f))) * (if (dragging) 1f else idleScale)
-                    }
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = {
-                                dragging = true
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomEnd,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(end = 24.dp, bottom = 120.dp)
+                .offset {
+                    IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt())
+                }
+                .size(width = BODY_W.dp, height = BODY_H.dp)
+                .graphicsLayer {
+                    val s = 1f + deform
+                    scaleX = s * (if (dragging) 1f else idleScale)
+                    scaleY = (1f / sqrt(s.coerceAtLeast(0.2f))) * (if (dragging) 1f else idleScale)
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = {
+                            dragging = true
+                            deform = 0f
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            scope.launch {
+                                offsetX.snapTo(offsetX.value + dragAmount.x)
+                                offsetY.snapTo(offsetY.value + dragAmount.y)
+                            }
+                            val speed = sqrt(
+                                dragAmount.x * dragAmount.x + dragAmount.y * dragAmount.y
+                            )
+                            deform = (speed * DEFORM_FACTOR).coerceIn(0f, DEFORM_CLAMP)
+                        },
+                        onDragEnd = {
+                            dragging = false
+                            scope.launch {
+                                launch {
+                                    offsetX.animateTo(
+                                        0f,
+                                        animationSpec = spring(
+                                            stiffness = SPRING_STIFFNESS,
+                                            dampingRatio = SPRING_DAMPING,
+                                        ),
+                                    )
+                                }
+                                launch {
+                                    offsetY.animateTo(
+                                        0f,
+                                        animationSpec = spring(
+                                            stiffness = SPRING_STIFFNESS,
+                                            dampingRatio = SPRING_DAMPING,
+                                        ),
+                                    )
+                                }
                                 deform = 0f
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                scope.launch {
-                                    offsetX.snapTo(offsetX.value + dragAmount.x)
-                                    offsetY.snapTo(offsetY.value + dragAmount.y)
-                                }
-                                // 形变量 = 速度 * 系数，夹住上限
-                                val speed = sqrt(
-                                    dragAmount.x * dragAmount.x + dragAmount.y * dragAmount.y
-                                )
-                                deform = (speed * DEFORM_FACTOR).coerceIn(0f, DEFORM_CLAMP)
-                            },
-                            onDragEnd = {
-                                dragging = false
-                                scope.launch {
-                                    launch {
-                                        offsetX.animateTo(
-                                            0f,
-                                            animationSpec = spring(
-                                                stiffness = SPRING_STIFFNESS,
-                                                dampingRatio = SPRING_DAMPING,
-                                            ),
-                                        )
-                                    }
-                                    launch {
-                                        offsetY.animateTo(
-                                            0f,
-                                            animationSpec = spring(
-                                                stiffness = SPRING_STIFFNESS,
-                                                dampingRatio = SPRING_DAMPING,
-                                            ),
-                                        )
-                                    }
-                                    launch {
-                                        // 形变回弹（弹一下）
-                                        deform = 0f
-                                    }
-                                }
-                            },
-                            onDragCancel = {
-                                dragging = false
-                                scope.launch {
-                                    offsetX.animateTo(0f, spring(SPRING_STIFFNESS, SPRING_DAMPING))
-                                    offsetY.animateTo(0f, spring(SPRING_STIFFNESS, SPRING_DAMPING))
-                                    deform = 0f
-                                }
-                            },
-                        )
-                    }
-                    .drawBehind {
-                        drawTangyuan(face = face, deform = deform)
-                    },
-            )
-        }
+                            }
+                        },
+                        onDragCancel = {
+                            dragging = false
+                            scope.launch {
+                                offsetX.animateTo(0f, spring(SPRING_STIFFNESS, SPRING_DAMPING))
+                                offsetY.animateTo(0f, spring(SPRING_STIFFNESS, SPRING_DAMPING))
+                                deform = 0f
+                            }
+                        },
+                    )
+                }
+                .drawBehind {
+                    drawTangyuan(face = face, deform = deform)
+                },
+        )
     }
 }
 
