@@ -7,6 +7,7 @@
 package me.rerere.rikkahub.ui.pages.chat
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -101,79 +102,92 @@ fun TangyuanPet(
     val bodyWpx = with(density) { BODY_W.dp.toPx() }
     val bodyHpx = with(density) { BODY_H.dp.toPx() }
 
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomEnd,
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        // 汤圆位置（相对屏幕右上角），松手后停在这儿
+        val posX = remember { Animatable(-1f) }
+        val posY = remember { Animatable(-1f) }
+        var sizeReady by remember { mutableStateOf(false) }
+
         Box(
             modifier = Modifier
-                .padding(end = 24.dp, bottom = 120.dp)
-                .offset {
-                    IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt())
+                .fillMaxSize()
+                .onSizeChanged { size ->
+                    if (!sizeReady && size.width > 0 && size.height > 0) {
+                        // 初始：右侧、屏幕偏上 1/3 处，保证露出来、不挡输入框
+                        sizeReady = true
+                        scope.launch {
+                            posX.snapTo(size.width - bodyWpx * 1.8f)
+                            posY.snapTo(size.height * 0.30f)
+                        }
+                    }
                 }
-                .size(width = BODY_W.dp, height = BODY_H.dp)
-                .graphicsLayer {
-                    val s = 1f + deform
-                    scaleX = s * (if (dragging) 1f else idleScale)
-                    scaleY = (1f / sqrt(s.coerceAtLeast(0.2f))) * (if (dragging) 1f else idleScale)
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = {
-                            dragging = true
-                            deform = 0f
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            scope.launch {
-                                offsetX.snapTo(offsetX.value + dragAmount.x)
-                                offsetY.snapTo(offsetY.value + dragAmount.y)
-                            }
-                            val speed = sqrt(
-                                dragAmount.x * dragAmount.x + dragAmount.y * dragAmount.y
+        ) {
+            if (sizeReady) {
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(posX.value.roundToInt(), posY.value.roundToInt())
+                        }
+                        .size(width = BODY_W.dp, height = BODY_H.dp)
+                        .graphicsLayer {
+                            val s = 1f + deform
+                            scaleX = s * (if (dragging) 1f else idleScale)
+                            scaleY = (1f / sqrt(s.coerceAtLeast(0.2f))) *
+                                (if (dragging) 1f else idleScale)
+                        }
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = {
+                                    dragging = true
+                                    deform = 0f
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    scope.launch {
+                                        posX.snapTo(posX.value + dragAmount.x)
+                                        posY.snapTo(posY.value + dragAmount.y)
+                                    }
+                                    val speed = sqrt(
+                                        dragAmount.x * dragAmount.x +
+                                            dragAmount.y * dragAmount.y
+                                    )
+                                    deform = (speed * DEFORM_FACTOR)
+                                        .coerceIn(0f, DEFORM_CLAMP)
+                                },
+                                onDragEnd = {
+                                    dragging = false
+                                    // 松手：不回原位，只让形变弹回（弹一下）
+                                    scope.launch {
+                                        val settled = Animatable(
+                                            initialValue = deform,
+                                            typeConverter = Float.VectorConverter,
+                                        )
+                                        settled.animateTo(
+                                            0f,
+                                            animationSpec = spring(
+                                                stiffness = SPRING_STIFFNESS,
+                                                dampingRatio = SPRING_DAMPING,
+                                            ),
+                                        ) {
+                                            deform = value
+                                        }
+                                    }
+                                },
+                                onDragCancel = {
+                                    dragging = false
+                                    deform = 0f
+                                },
                             )
-                            deform = (speed * DEFORM_FACTOR).coerceIn(0f, DEFORM_CLAMP)
+                        }
+                        .drawBehind {
+                            drawTangyuan(face = face, deform = deform)
                         },
-                        onDragEnd = {
-                            dragging = false
-                            scope.launch {
-                                launch {
-                                    offsetX.animateTo(
-                                        0f,
-                                        animationSpec = spring(
-                                            stiffness = SPRING_STIFFNESS,
-                                            dampingRatio = SPRING_DAMPING,
-                                        ),
-                                    )
-                                }
-                                launch {
-                                    offsetY.animateTo(
-                                        0f,
-                                        animationSpec = spring(
-                                            stiffness = SPRING_STIFFNESS,
-                                            dampingRatio = SPRING_DAMPING,
-                                        ),
-                                    )
-                                }
-                                deform = 0f
-                            }
-                        },
-                        onDragCancel = {
-                            dragging = false
-                            scope.launch {
-                                offsetX.animateTo(0f, spring(SPRING_STIFFNESS, SPRING_DAMPING))
-                                offsetY.animateTo(0f, spring(SPRING_STIFFNESS, SPRING_DAMPING))
-                                deform = 0f
-                            }
-                        },
-                    )
-                }
-                .drawBehind {
-                    drawTangyuan(face = face, deform = deform)
-                },
-        )
+                )
+            }
+        }
     }
 }
+
 
 /** 画汤圆本体：光晕 + 浓橘核 + 表情 */
 private fun DrawScope.drawTangyuan(face: TangyuanFace, deform: Float) {
