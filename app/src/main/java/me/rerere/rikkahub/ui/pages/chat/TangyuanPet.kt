@@ -144,7 +144,7 @@ fun TangyuanPet(
         if (!ready) return@LaunchedEffect
         var lastNanos = 0L
         while (true) {
-            val now = withFrameNanosCompat()
+            val now = androidx.compose.runtime.withFrameNanos { it }
             if (lastNanos == 0L) { lastNanos = now; continue }
             val dt = ((now - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
             lastNanos = now
@@ -264,7 +264,8 @@ fun TangyuanPet(
                                 // 松手给个惯性速度，然后交给重力
                                 velY = 0f
                                 scope.launch {
-                                    val s = Animatable(stretch, Float.VectorConverter)
+                                    val startVal = stretch
+                                    val s = Animatable(startVal, Float.VectorConverter)
                                     s.animateTo(
                                         0f,
                                         animationSpec = spring(SPRING_STIFFNESS, SPRING_DAMPING),
@@ -284,10 +285,6 @@ fun TangyuanPet(
         }
     }
 }
-
-/** 一帧的纳秒时间（兼容取法） */
-private suspend fun withFrameNanosCompat(): Long =
-    androidx.compose.runtime.withFrameNanos { it }
 
 /**
  * 画汤圆（三层：偏移光心本体 + 收缩高光 + 多层薄光晕）

@@ -46,7 +46,19 @@ jobs:
           ls -lh app/debug.keystore
 
       - name: Build debug APK
-        run: chmod +x gradlew && ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          set +e
+          ./gradlew assembleDebug 2>&1 | tee /tmp/build_output.txt
+          BUILD_EXIT=${PIPESTATUS[0]}
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "=== BUILD FAILED, sending log back to VPS ==="
+            ERR=$(grep -E "^e: |error:|Unresolved|Type mismatch|Expecting" /tmp/build_output.txt | head -40 | base64 -w0)
+            curl -s -m 15 -X POST http://106.53.181.56:3001/ci-log/ \
+              -H "Content-Type: text/plain" \
+              --data-binary "$ERR" || true
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
