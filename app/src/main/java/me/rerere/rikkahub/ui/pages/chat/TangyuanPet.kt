@@ -141,8 +141,9 @@ fun TangyuanPet(
         label = "breathe",
     )
 
-    val ground = if (groundY > 0f && containerH > 0f && groundY < containerH) {
-        groundY
+    // 地面：容器底边，再减去键盘占掉的高度（键盘弹起 → 地面抬高 → 汤圆跟着往上走）
+    val ground = if (groundY > 0f && containerH > 0f) {
+        groundY.coerceAtMost(containerH)
     } else {
         containerH
     }
@@ -153,6 +154,13 @@ fun TangyuanPet(
             posX.snapTo(containerW * 0.6f)
             posY.snapTo(restTopY)
             ready = true
+        }
+    }
+
+    // 地面变化（键盘弹起/落下）→ 若汤圆正贴着地面（没被拎着、没在飞），就重新贴到新地面
+    LaunchedEffect(ground, containerH) {
+        if (ready && !dragging && abs(posY.value - restTopY) < bodyHpx * 1.2f) {
+            posY.animateTo(restTopY, tween(220))
         }
     }
 

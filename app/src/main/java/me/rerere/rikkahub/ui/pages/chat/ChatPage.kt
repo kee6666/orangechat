@@ -15,9 +15,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
@@ -538,17 +539,21 @@ private fun ChatPageContent(
                 },
             )
 
-            // 汤圆（阿年和言一起养的桌宠）
-            // 关键：把它限制在 content 区（innerPadding）内，它的底边就是输入框顶部，
-            // 键盘弹起时 content 区自动变矮 → 汤圆天然跟随，无需任何坐标计算
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .consumeWindowInsets(innerPadding)
-                    .imePadding()
-            ) {
-                TangyuanPet(groundY = 0f)
-            }
+
+        }
+
+        // 汤圆：盖满全屏的层。地面 = 输入框顶边（同一坐标系两个 positionInWindow 相减）
+        // 键盘弹起 → 输入框被顶上去 → inputBarTopPx 变小 → 汤圆地面自动上移
+        var petBoxTopNow by remember { mutableStateOf(0f) }
+        val groundInBox = remember(inputBarTopPx, petBoxTopNow) {
+            if (inputBarTopPx > 0f) (inputBarTopPx - petBoxTopNow).coerceAtLeast(0f) else -1f
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { coords -> petBoxTopNow = coords.positionInWindow().y }
+        ) {
+            TangyuanPet(groundY = groundInBox)
         }
     }
 }
