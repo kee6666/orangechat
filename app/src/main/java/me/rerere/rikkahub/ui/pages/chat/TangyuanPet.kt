@@ -125,6 +125,7 @@ fun TangyuanPet(
     var sleeping by remember { mutableStateOf(false) }
     var idleTimer by remember { mutableFloatStateOf(0f) } // 秒
     var zzPhase by remember { mutableFloatStateOf(0f) }   // 💤 飘动画相位
+    var wobble by remember { mutableFloatStateOf(0f) }     // 轮廓蠕动相位（液体感）
 
     // 表情覆盖（互动时临时切换），无覆盖时用传进来的 face
     var faceOverride by remember { mutableStateOf<TangyuanFace?>(null) }
@@ -190,6 +191,8 @@ fun TangyuanPet(
 
             if (dragging) {
                 bobPhase += dt * 9f
+            // 轮廓蠕动：慢一点，像果冻自己在动；拖动/走路时快一点（有"晃动"感）
+            wobble += dt * (if (dragging || state == PetState.WALK) 3.4f else 1.5f)
                 continue
             }
 
@@ -308,7 +311,7 @@ fun TangyuanPet(
                         )
                     }
                     .drawBehind {
-                        drawTangyuan(effectiveFace, blink, sleeping, zzPhase)
+                        drawTangyuan(effectiveFace, blink, sleeping, zzPhase, wobble)
                     },
             )
         }
@@ -321,6 +324,7 @@ private fun DrawScope.drawTangyuan(
     blink: Float,
     sleeping: Boolean,
     zzPhase: Float,
+    wobble: Float,
 ) {
     val w = size.width
     val h = size.height
@@ -329,35 +333,41 @@ private fun DrawScope.drawTangyuan(
     val r = h / 2f
     val xScale = (w / 2f) / r
 
-    // ① 外光晕
+    // ① 外光晕（也用蠕动轮廓，跟着一起呼吸）
     scale(scaleX = xScale, scaleY = 1f, pivot = Offset(cx, cy)) {
-        drawCircle(
+        val haloPath1 = wobbleEllipsePath(cx, cy, r * 1.55f, r * 1.55f, wobble, 0.085f)
+        drawPath(
+            haloPath1,
             brush = Brush.radialGradient(
                 colors = listOf(
-                    HALO.copy(alpha = 0f),
-                    HALO.copy(alpha = 0.10f),
+                    HALO.copy(alpha = 0.24f),
+                    HALO.copy(alpha = 0.13f),
                     HALO.copy(alpha = 0f),
                 ),
                 center = Offset(cx, cy), radius = r * 1.9f,
             ),
-            radius = r * 1.9f, center = Offset(cx, cy),
         )
-        drawCircle(
+        val haloPath2 = wobbleEllipsePath(cx, cy, r * 1.28f, r * 1.28f, wobble, 0.10f)
+        drawPath(
+            haloPath2,
             brush = Brush.radialGradient(
                 colors = listOf(
-                    HALO.copy(alpha = 0.26f),
-                    HALO.copy(alpha = 0.14f),
+                    HALO.copy(alpha = 0.30f),
+                    HALO.copy(alpha = 0.16f),
                     HALO.copy(alpha = 0f),
                 ),
                 center = Offset(cx, cy), radius = r * 1.45f,
             ),
-            radius = r * 1.45f, center = Offset(cx, cy),
         )
     }
 
-    // ② 球体本体
+    // ② 球体本体（轮廓是"会蠕动的椭圆"→ 液体感从这里来）
     scale(scaleX = xScale, scaleY = 1f, pivot = Offset(cx, cy)) {
-        drawCircle(
+        val bodyPath = wobbleEllipsePath(cx, cy, r, r, wobble, 0.06f)
+
+        // 底色：亮心偏左上
+        drawPath(
+            bodyPath,
             brush = Brush.radialGradient(
                 colors = listOf(
                     CORE_HOT, CORE_HOT, HOT_YELLOW, GLOW_YELLOW, BODY_ORANGE, BODY_DEEP,
@@ -365,14 +375,47 @@ private fun DrawScope.drawTangyuan(
                 center = Offset(cx - r * 0.18f, cy - r * 0.20f),
                 radius = r * 1.06f,
             ),
-            radius = r, center = Offset(cx, cy),
         )
-        drawCircle(
+        // 底部压暗（厚度）
+        drawPath(
+            bodyPath,
             brush = Brush.radialGradient(
                 colors = listOf(Color.Transparent, Color.Transparent, BODY_DEEP.copy(alpha = 0.55f)),
                 center = Offset(cx, cy), radius = r,
             ),
-            radius = r, center = Offset(cx, cy),
+        )
+        // 内部透光（中间一团柔亮，光从里面散出来）
+        drawPath(
+            bodyPath,
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0x66FFFFE0),
+                    Color(0x22FFF0B4),
+                    Color.Transparent,
+                ),
+                center = Offset(cx - r * 0.15f, cy - r * 0.10f),
+                radius = r * 0.75f,
+            ),
+        )
+
+        // ③ 三个小高光（果冻感的关键）
+        //  高光1：大，左上
+        drawOval(
+            color = Color(0xE8FFFFFF),
+            topLeft = Offset(cx - r * 0.52f, cy - r * 0.62f),
+            size = Size(r * 0.42f, r * 0.30f),
+        )
+        //  高光2：小，右侧
+        drawOval(
+            color = Color(0xA0FFFFFF),
+            topLeft = Offset(cx + r * 0.22f, cy - r * 0.46f),
+            size = Size(r * 0.24f, r * 0.17f),
+        )
+        //  高光3：极小，下方（点一下）
+        drawOval(
+            color = Color(0x70FFFFFF),
+            topLeft = Offset(cx - r * 0.30f, cy + r * 0.42f),
+            size = Size(r * 0.15f, r * 0.10f),
         )
     }
 
@@ -384,6 +427,32 @@ private fun DrawScope.drawTangyuan(
 
     // ⑤ 睡觉时右上角飘 💤
     if (sleeping) drawSleepZ(w, h, zzPhase)
+}
+
+/** 会蠕动的椭圆路径：一圈点，半径带正弦扰动 → 液体/果冻感（完美闭合） */
+private fun wobbleEllipsePath(
+    cx: Float, cy: Float,
+    rx: Float, ry: Float,
+    phase: Float,
+    amp: Float,
+): Path {
+    val p = Path()
+    val segments = 48
+    var first = true
+    for (i in 0..segments) {
+        val a = (i.toFloat() / segments) * 2f * Math.PI.toFloat()
+        // 三个不同频率的波叠加 → 有机的蠕动（不是死板的规则波纹）
+        val w =
+            1f +
+                amp * sin(a * 2f + phase * 1.0f) +
+                amp * 0.6f * sin(a * 3f - phase * 1.4f) +
+                amp * 0.4f * sin(a * 5f + phase * 0.8f)
+        val px = cx + cos(a) * rx * w
+        val py = cy + sin(a) * ry * w
+        if (first) { p.moveTo(px, py); first = false } else { p.lineTo(px, py) }
+    }
+    p.close()
+    return p
 }
 
 /** 像素描边：沿椭圆均匀摆放小方块，围成一圈 */
