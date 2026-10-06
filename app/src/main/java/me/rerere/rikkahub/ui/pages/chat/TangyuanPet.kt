@@ -207,6 +207,12 @@ fun TangyuanPet(
                 continue
             }
 
+            // 保险丝①：在重力算之前，如果汤圆已经在地面下方，直接拽回地面（防悬空卡死）
+            if (ready && posY.value > restTopY) {
+                posY.snapTo(restTopY)
+                if (velY > 0f) velY = 0f
+            }
+
             if (!sleeping) {
                 velY += GRAVITY * dt
                 var newY = posY.value + velY * dt
@@ -222,6 +228,10 @@ fun TangyuanPet(
                     } else {
                         velY = 0f
                     }
+                }
+                // 保险丝②：落地瞬间再确认一次位置，不许停在半空
+                if (velY == 0f && abs(newY - floor) > 1f && newY > floor) {
+                    newY = floor
                 }
                 if (newY < 0f) { newY = 0f; if (velY < 0f) velY = 0f }
 
@@ -306,6 +316,7 @@ fun TangyuanPet(
                                 dragging = false
                                 faceOverride = null
                                 idleTimer = 0f
+                                velY = 1f   // 松手给个初速度，确保开始自由落体（否则会悬空卡住）
                                 scope.launch {
                                     stretchAnim.snapTo(stretchY)
                                     stretchAnim.animateTo(
