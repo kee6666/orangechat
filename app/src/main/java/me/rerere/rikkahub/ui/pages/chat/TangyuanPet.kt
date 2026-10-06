@@ -160,10 +160,17 @@ fun TangyuanPet(
         }
     }
 
-    // 地面变化（键盘弹起/落下）→ 若汤圆正贴着地面（没被拎着、没在飞），就重新贴到新地面
-    LaunchedEffect(ground, containerH) {
-        if (ready && !dragging && abs(posY.value - restTopY) < bodyHpx * 1.2f) {
-            posY.animateTo(restTopY, tween(220))
+    // 地面变化（键盘弹起/落下）→ 汤圆跟着地面走
+    //   地面抬高（键盘弹起）→ 直接抬上去（贴地的才抬）
+    //   地面降低（键盘收起）→ 不硬拽，靠重力自然掉下去
+    LaunchedEffect(restTopY, containerH) {
+        if (!ready || dragging) return@LaunchedEffect
+        val target = restTopY
+        val current = posY.value
+        // 只有"本来就在地面附近"的汤圆才跟着抬；被扔在半空的让它自己落
+        if (current > target && current - target < bodyHpx * 2.5f) {
+            posY.animateTo(target, tween(180))
+            velY = 0f
         }
     }
 
@@ -207,17 +214,12 @@ fun TangyuanPet(
                 continue
             }
 
-            // 保险丝①：在重力算之前，如果汤圆已经在地面下方，直接拽回地面（防悬空卡死）
-            if (ready && posY.value > restTopY) {
-                posY.snapTo(restTopY)
-                if (velY > 0f) velY = 0f
-            }
-
-            if (!sleeping) {
+            // 重力：睡觉时也照常下落（只停走路的随机行为，不停物理）
+            run {
                 velY += GRAVITY * dt
                 var newY = posY.value + velY * dt
                 var newX = posX.value +
-                    (if (state == PetState.WALK) walkDir * WALK_SPEED else 0f) * dt
+                    (if (!sleeping && state == PetState.WALK) walkDir * WALK_SPEED else 0f) * dt
 
                 val floor = restTopY
                 if (newY >= floor) {
@@ -228,10 +230,6 @@ fun TangyuanPet(
                     } else {
                         velY = 0f
                     }
-                }
-                // 保险丝②：落地瞬间再确认一次位置，不许停在半空
-                if (velY == 0f && abs(newY - floor) > 1f && newY > floor) {
-                    newY = floor
                 }
                 if (newY < 0f) { newY = 0f; if (velY < 0f) velY = 0f }
 
