@@ -46,7 +46,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -547,13 +549,18 @@ private fun ChatPageContent(
 
         // 汤圆：盖满全屏的层。
         // 地面 = 容器高 − 键盘实高 − 输入框实高 − 底部安全区
-        // 只用"尺寸"（键盘高/输入框高/安全区），不依赖任何位置变化 → 稳定可靠
+        // ⚠️ 关键：键盘高度必须用 snapshotFlow 订阅（照抄项目里 ImeAutoScroller 的写法）
+        //    直接 val h = WindowInsets.ime.getBottom() 是一次性读值，读到 0 后永远不变 → 汤圆不动
         val density = LocalDensity.current
-        val imeHeight = WindowInsets.ime.getBottom(density).toFloat()
-        val navBarHeight = WindowInsets.navigationBars.getBottom(density).toFloat()
-        val groundInBox = remember(imeHeight, navBarHeight, inputBarHeightPx) {
-            imeHeight + inputBarHeightPx + navBarHeight
+        val imeInsets = WindowInsets.ime
+        var imeHeight by remember { mutableFloatStateOf(0f) }
+        LaunchedEffect(Unit) {
+            snapshotFlow { imeInsets.getBottom(density) }.collect { h ->
+                imeHeight = h.toFloat()
+            }
         }
+        val navBarHeight = WindowInsets.navigationBars.getBottom(density).toFloat()
+        val groundInBox = imeHeight + inputBarHeightPx + navBarHeight
         Box(modifier = Modifier.fillMaxSize()) {
             // groundY < 0 时 TangyuanPet 用 containerH + groundY 当地面
             TangyuanPet(groundY = -groundInBox)
