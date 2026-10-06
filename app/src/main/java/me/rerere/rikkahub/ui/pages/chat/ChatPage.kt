@@ -296,6 +296,7 @@ private fun ChatPageContent(
         AssistantBackground(setting = setting)
         val context = LocalContext.current
         var inputBarTopPx by remember { mutableStateOf(0f) }
+        var inputBarHeightPx by remember { mutableStateOf(0f) }
         var petBoxTopPx by remember { mutableStateOf(0f) }
         Scaffold(
             topBar = {
@@ -358,6 +359,7 @@ private fun ChatPageContent(
                 Box(
                     modifier = Modifier.onGloballyPositioned { coords ->
                         inputBarTopPx = coords.positionInWindow().y
+                        inputBarHeightPx = coords.size.height.toFloat()
                     }
                 ) {
                 ChatInput(
@@ -542,18 +544,18 @@ private fun ChatPageContent(
 
         }
 
-        // 汤圆：盖满全屏的层。地面 = 输入框顶边（同一坐标系两个 positionInWindow 相减）
-        // 键盘弹起 → 输入框被顶上去 → inputBarTopPx 变小 → 汤圆地面自动上移
-        var petBoxTopNow by remember { mutableStateOf(0f) }
-        val groundInBox = remember(inputBarTopPx, petBoxTopNow) {
-            if (inputBarTopPx > 0f) (inputBarTopPx - petBoxTopNow).coerceAtLeast(0f) else -1f
+        // 汤圆：盖满全屏的层。
+        // 地面 = 容器高 − 键盘实高 − 输入框实高 − 底部安全区
+        // 只用"尺寸"（键盘高/输入框高/安全区），不依赖任何位置变化 → 稳定可靠
+        val density = LocalDensity.current
+        val imeHeight = WindowInsets.ime.getBottom(density).toFloat()
+        val navBarHeight = WindowInsets.navigationBars.getBottom(density).toFloat()
+        val groundInBox = remember(imeHeight, navBarHeight, inputBarHeightPx) {
+            imeHeight + inputBarHeightPx + navBarHeight
         }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .onGloballyPositioned { coords -> petBoxTopNow = coords.positionInWindow().y }
-        ) {
-            TangyuanPet(groundY = groundInBox)
+        Box(modifier = Modifier.fillMaxSize()) {
+            // groundY < 0 时 TangyuanPet 用 containerH + groundY 当地面
+            TangyuanPet(groundY = -groundInBox)
         }
     }
 }

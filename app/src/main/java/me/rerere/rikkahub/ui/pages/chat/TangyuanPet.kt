@@ -141,11 +141,14 @@ fun TangyuanPet(
         label = "breathe",
     )
 
-    // 地面：容器底边，再减去键盘占掉的高度（键盘弹起 → 地面抬高 → 汤圆跟着往上走）
-    val ground = if (groundY > 0f && containerH > 0f) {
-        groundY.coerceAtMost(containerH)
-    } else {
-        containerH
+    // 地面：
+    //   groundY > 0 → 容器内绝对 y（旧用法）
+    //   groundY < 0 → 从容器底往上抬 |groundY|（键盘+输入框+安全区，键盘跟随用这个）
+    val ground = when {
+        containerH <= 0f -> 0f
+        groundY > 0f -> groundY.coerceAtMost(containerH)
+        groundY < 0f -> (containerH + groundY).coerceAtLeast(0f)
+        else -> containerH
     }
     val restTopY = (ground - bottomGapPx - bodyHpx).coerceAtLeast(0f)
 
