@@ -106,7 +106,7 @@
       android:showWhenLocked="true"
       android:turnScreenOn="true"
       android:theme="@style/Theme.Rikkahub"
-      android:windowSoftInputMode="adjustResize">
+      android:windowSoftInputMode="adjustNothing">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
 

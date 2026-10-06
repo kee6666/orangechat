@@ -4,13 +4,13 @@
  * v12 新增（阿年定稿）：
  *  1. 八张脸：普通/开心/犯困/惊讶/委屈/生气/害羞/心动
  *  2. 眨眼：每 3~6 秒自己眨一下（0.15 秒）
- *  3. 像素描边：沿椭圆均匀取点画小方块，完美闭合（不是手摆的）
+ *  3. 液体感：轮廓蠕动（wobbleEllipsePath）+ 三个小高光 + 内部透光
  *  4. 睡觉：很久没互动 → 闭眼 + 右上角 💤 一个个往上飘、淡出
  *
  * 保留 v11：发光球体、重力下落、落地压扁回弹、拎起变水滴、
  *           拖动停物理、防僵（常驻 Animatable）
  *
- * ⚠️ 仍未解决：键盘跟随（inputBarTopPx 坐标系问题，待下次）
+ *  5. 键盘跟随：容器 imePadding() + Manifest adjustNothing（v15）
  */
 package me.rerere.rikkahub.ui.pages.chat
 
@@ -419,9 +419,6 @@ private fun DrawScope.drawTangyuan(
         )
     }
 
-    // ③ 像素描边（沿椭圆均匀取点，画小方块 —— 完美闭合）
-    drawPixelOutline(cx, cy, w / 2f, h / 2f)
-
     // ④ 表情
     drawFace(face, w, h, blink)
 
@@ -453,24 +450,6 @@ private fun wobbleEllipsePath(
     }
     p.close()
     return p
-}
-
-/** 像素描边：沿椭圆均匀摆放小方块，围成一圈 */
-private fun DrawScope.drawPixelOutline(cx: Float, cy: Float, rx: Float, ry: Float) {
-    val count = 20                       // 一圈方块数量（可调）
-    val block = rx * 0.20f               // 方块边长
-    for (i in 0 until count) {
-        val a = (i.toFloat() / count) * 2f * Math.PI.toFloat() - Math.PI.toFloat() / 2f
-        val px = cx + cos(a) * (rx + block * 0.35f)
-        val py = cy + sin(a) * (ry + block * 0.35f)
-        // 透明度按角度微微起伏，让边缘有"呼吸感"
-        val alpha = 0.55f + 0.35f * (0.5f + 0.5f * sin(i * 0.8f))
-        drawRect(
-            color = EDGE_PIXEL.copy(alpha = alpha),
-            topLeft = Offset(px - block / 2f, py - block / 2f),
-            size = Size(block, block),
-        )
-    }
 }
 
 /** 睡觉的 💤：一个个往上飘、淡出 */
