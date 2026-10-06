@@ -156,6 +156,9 @@ fun TangyuanPet(
     var velY by remember { mutableFloatStateOf(0f) }
 
     var stretchY by remember { mutableFloatStateOf(1f) }
+    // 落地弹簧：stretchY 不再直接回 1，改成带阻尼的振荡（果冻回弹）
+    var springVel by remember { mutableFloatStateOf(0f) }   // 拉伸量的速度
+    var springOn by remember { mutableStateOf(false) }       // 弹簧是否在响
     var dragging by remember { mutableStateOf(false) }
     val stretchAnim = remember { Animatable(1f, Float.VectorConverter) }
 
@@ -423,10 +426,14 @@ fun TangyuanPet(
                 if (newY >= floor) {
                     newY = floor
                     if (velY > 320f) {
+                        // 触地瞬间：压扁 + 把这股冲量交给弹簧，让它自己抖几个来回
                         velY = -velY * RESTITUTION
-                        stretchY = 0.72f
+                        stretchY = 0.70f
+                        springVel = 0f
+                        springOn = true
                     } else {
                         velY = 0f
+                        if (!springOn) { stretchY = 0.92f; springVel = 0f; springOn = true }
                     }
                 }
                 if (newY < 0f) { newY = 0f; if (velY < 0f) velY = 0f }
@@ -440,7 +447,24 @@ fun TangyuanPet(
                 posY.snapTo(newY)
 
                 if (velY > 110f) {
+                    // 下落中：速度越快拉得越长
                     stretchY = (1f + velY / 3000f).coerceAtMost(1.35f)
+                    springOn = false
+                    springVel = 0f
+                } else if (springOn) {
+                    // 阻尼弹簧：扁→弹长→再扁→再长，三四个来回后停住
+                    // 刚度/阻尼调过：K 大=弹得快，D 大=衰减快
+                    val K = 260f
+                    val D = 9.5f
+                    val acc = -K * (stretchY - 1f) - D * springVel
+                    springVel += acc * dt
+                    stretchY += springVel * dt
+                    // 稳定判据：幅度和速度都很小 → 收工
+                    if (abs(stretchY - 1f) < 0.004f && abs(springVel) < 0.05f) {
+                        stretchY = 1f
+                        springVel = 0f
+                        springOn = false
+                    }
                 } else {
                     stretchY += (1f - stretchY) * (dt * 10f)
                     if (abs(stretchY - 1f) < 0.006f) stretchY = 1f
