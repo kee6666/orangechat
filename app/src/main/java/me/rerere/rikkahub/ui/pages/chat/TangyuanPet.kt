@@ -133,6 +133,9 @@ private val HALO = Color(0xFFFFB84D)
 private val FACE_DARK = Color(0xFF8A4412)
 private val EDGE_PIXEL = Color(0xFFFFD68A)
 private val BLUSH = Color(0x66FF5A5A)
+private val HAPPY_TONGUE = Color(0xFFFF9A9A)
+private val TEAR_BLUE = Color(0xFF7EC8F0)
+private val HEART_RED = Color(0xFFFF5A7A)
 
 @Composable
 fun TangyuanPet(
@@ -173,7 +176,7 @@ fun TangyuanPet(
     var idleTimer by remember { mutableFloatStateOf(0f) } // 秒
     var zzPhase by remember { mutableFloatStateOf(0f) }   // 💤 飘动画相位
     var wobble by remember { mutableFloatStateOf(0f) }     // 轮廓蠕动相位（液体感）
-    var cloudPhase by remember { mutableFloatStateOf(0f) } // 乌云飘动相位
+    var animPhase by remember { mutableFloatStateOf(0f) } // 表情动作相位（抖/蹦/蒸汽/飘心共用）
 
     // 表情覆盖（互动时临时切换），无覆盖时用传进来的 face
     var faceOverride by remember { mutableStateOf<TangyuanFace?>(null) }
@@ -437,7 +440,7 @@ fun TangyuanPet(
                 }
             }
             if (sleeping) zzPhase += dt * 0.22f
-            cloudPhase += dt * 0.7f
+            animPhase += dt * 10f
 
             if (dragging) {
                 bobPhase += dt * 9f
@@ -538,9 +541,12 @@ fun TangyuanPet(
             Box(
                 modifier = Modifier
                     .offset {
+                        // 表情配动作：害羞=高频小抖，心动=原地轻蹦
+                        val actX = if (effectiveFace == TangyuanFace.SHY) sin(animPhase * 40f) * 1.2f else 0f
+                        val actY = if (effectiveFace == TangyuanFace.HEART) -abs(sin(animPhase * 8f)) * 2.5f else 0f
                         IntOffset(
-                            (posX.value + leanX).roundToInt(),
-                            (posY.value + bob).roundToInt(),
+                            (posX.value + leanX + actX).roundToInt(),
+                            (posY.value + bob + actY).roundToInt(),
                         )
                     }
                     .size(width = BODY_W.dp, height = BODY_H.dp)
@@ -602,7 +608,7 @@ fun TangyuanPet(
                         )
                     }
                     .drawBehind {
-                        drawTangyuan(effectiveFace, blink, sleeping, zzPhase, wobble, cloudPhase)
+                        drawTangyuan(effectiveFace, blink, sleeping, zzPhase, wobble, animPhase)
                     },
             ) {
                 // 长按菜单：贴着头顶弹出
@@ -648,7 +654,7 @@ private fun DrawScope.drawTangyuan(
     sleeping: Boolean,
     zzPhase: Float,
     wobble: Float,
-    cloudPhase: Float = 0f,
+    animPhase: Float = 0f,
 ) {
     val w = size.width
     val h = size.height
@@ -744,7 +750,7 @@ private fun DrawScope.drawTangyuan(
     }
 
     // ④ 表情
-    drawFace(face, w, h, blink)
+    drawFace(face, w, h, blink, animPhase)
 
     // ⑤ 睡觉时右上角飘 💤
     if (sleeping) drawSleepZ(w, h, zzPhase)
@@ -807,7 +813,7 @@ private fun DrawScope.drawSleepZ(w: Float, h: Float, phase: Float) {
     }
 }
 
-private fun DrawScope.drawFace(face: TangyuanFace, w: Float, h: Float, blink: Float) {
+private fun DrawScope.drawFace(face: TangyuanFace, w: Float, h: Float, blink: Float, animPhase: Float = 0f) {
     val eyeW = w * 0.058f
     val eyeH = h * 0.15f
     val eyeY = h * 0.40f
@@ -816,54 +822,65 @@ private fun DrawScope.drawFace(face: TangyuanFace, w: Float, h: Float, blink: Fl
     val mouthY = h * 0.64f
     val closed = blink > 0.5f
 
-    // 眼睛（大多数表情共用；闭眼=一条线）
-    fun eyes(round: Boolean = false) {
-        if (closed) {
-            drawLine(FACE_DARK, Offset(lx, eyeY + eyeH * 0.6f),
-                Offset(lx + eyeW, eyeY + eyeH * 0.6f), strokeWidth = eyeH * 0.20f)
-            drawLine(FACE_DARK, Offset(rx, eyeY + eyeH * 0.6f),
-                Offset(rx + eyeW, eyeY + eyeH * 0.6f), strokeWidth = eyeH * 0.20f)
-        } else if (round) {
-            drawCircle(FACE_DARK, radius = eyeW * 0.95f, center = Offset(lx + eyeW / 2f, eyeY + eyeH / 2f))
-            drawCircle(FACE_DARK, radius = eyeW * 0.95f, center = Offset(rx + eyeW / 2f, eyeY + eyeH / 2f))
-        } else {
-            drawRoundRect(FACE_DARK, Offset(lx, eyeY), Size(eyeW, eyeH),
-                cornerRadius = CornerRadius(eyeW * 0.3f))
-            drawRoundRect(FACE_DARK, Offset(rx, eyeY), Size(eyeW, eyeH),
-                cornerRadius = CornerRadius(eyeW * 0.3f))
-        }
+    // 眨眼：全表情共用一条闭眼线
+    if (closed) {
+        drawLine(FACE_DARK, Offset(lx, eyeY + eyeH * 0.6f),
+            Offset(lx + eyeW, eyeY + eyeH * 0.6f), strokeWidth = eyeH * 0.20f)
+        drawLine(FACE_DARK, Offset(rx, eyeY + eyeH * 0.6f),
+            Offset(rx + eyeW, eyeY + eyeH * 0.6f), strokeWidth = eyeH * 0.20f)
     }
 
-    fun blush() {
-        drawOval(BLUSH, topLeft = Offset(w * 0.16f, h * 0.55f), size = Size(w * 0.16f, h * 0.09f))
-        drawOval(BLUSH, topLeft = Offset(w * 0.68f, h * 0.55f), size = Size(w * 0.16f, h * 0.09f))
+    fun blush(strong: Boolean = false) {
+        val bw = w * (if (strong) 0.20f else 0.16f)
+        val bh = h * (if (strong) 0.11f else 0.09f)
+        drawOval(BLUSH, topLeft = Offset(w * 0.14f, h * 0.55f), size = Size(bw, bh))
+        drawOval(BLUSH, topLeft = Offset(w * 0.66f, h * 0.55f), size = Size(bw, bh))
     }
 
     when (face) {
+        // ===== 普通：圆眼 + 小微笑 =====
         TangyuanFace.NORMAL -> {
-            eyes()
+            if (!closed) {
+                drawRoundRect(FACE_DARK, Offset(lx, eyeY), Size(eyeW, eyeH),
+                    cornerRadius = CornerRadius(eyeW * 0.3f))
+                drawRoundRect(FACE_DARK, Offset(rx, eyeY), Size(eyeW, eyeH),
+                    cornerRadius = CornerRadius(eyeW * 0.3f))
+            }
             val p = Path().apply {
                 moveTo(w * 0.45f, mouthY)
                 quadraticTo(w * 0.50f, mouthY + h * 0.07f, w * 0.55f, mouthY)
             }
             drawPath(p, FACE_DARK, style = Stroke(width = w * 0.020f))
         }
+
+        // ===== 开心：弯月眼 + 张大嘴（带小舌头）+ 酒窝 =====
         TangyuanFace.HAPPY -> {
-            if (closed) eyes() else {
+            if (!closed) {
                 drawArc(FACE_DARK, 200f, 140f, false,
-                    topLeft = Offset(lx, eyeY - eyeH * 0.3f), size = Size(eyeW * 1.6f, eyeH * 1.2f),
+                    topLeft = Offset(lx, eyeY - eyeH * 0.35f), size = Size(eyeW * 1.7f, eyeH * 1.3f),
                     style = Stroke(width = eyeW * 0.28f))
                 drawArc(FACE_DARK, 200f, 140f, false,
-                    topLeft = Offset(rx, eyeY - eyeH * 0.3f), size = Size(eyeW * 1.6f, eyeH * 1.2f),
+                    topLeft = Offset(rx, eyeY - eyeH * 0.35f), size = Size(eyeW * 1.7f, eyeH * 1.3f),
                     style = Stroke(width = eyeW * 0.28f))
             }
+            // 实心大笑嘴
             val p = Path().apply {
-                moveTo(w * 0.44f, mouthY)
-                quadraticTo(w * 0.50f, mouthY + h * 0.11f, w * 0.56f, mouthY)
+                moveTo(w * 0.43f, mouthY)
+                quadraticTo(w * 0.50f, mouthY + h * 0.15f, w * 0.57f, mouthY)
                 close()
             }
             drawPath(p, FACE_DARK)
+            // 小舌头
+            drawOval(HAPPY_TONGUE, topLeft = Offset(w * 0.465f, mouthY + h * 0.075f),
+                size = Size(w * 0.07f, h * 0.045f))
+            // 酒窝
+            drawLine(BLUSH, Offset(w * 0.38f, mouthY + h * 0.12f), Offset(w * 0.43f, mouthY + h * 0.06f),
+                strokeWidth = w * 0.016f)
+            drawLine(BLUSH, Offset(w * 0.57f, mouthY + h * 0.12f), Offset(w * 0.62f, mouthY + h * 0.06f),
+                strokeWidth = w * 0.016f)
         }
+
+        // ===== 困：眼皮耷拉 + 小圆嘴 =====
         TangyuanFace.SLEEPY -> {
             val lp = Path().apply {
                 moveTo(lx - eyeW * 0.2f, eyeY)
@@ -877,83 +894,184 @@ private fun DrawScope.drawFace(face: TangyuanFace, w: Float, h: Float, blink: Fl
             drawPath(rp, FACE_DARK, style = Stroke(width = w * 0.022f))
             drawCircle(FACE_DARK, radius = w * 0.026f, center = Offset(w * 0.50f, mouthY))
         }
+
+        // ===== 惊讶：瞪圆大眼（带高光）+ O形嘴 =====
         TangyuanFace.SURPRISED -> {
-            // 长条眼（跟普通一样，不瞪人）+ 圆嘴 O
-            eyes()
-            drawCircle(FACE_DARK, radius = w * 0.030f, center = Offset(w * 0.50f, mouthY + h * 0.03f))
+            if (!closed) {
+                val er = eyeW * 1.35f
+                drawCircle(FACE_DARK, radius = er, center = Offset(lx + eyeW * 0.5f, eyeY + eyeH * 0.5f))
+                drawCircle(FACE_DARK, radius = er, center = Offset(rx + eyeW * 0.5f, eyeY + eyeH * 0.5f))
+                // 高光：右上方小圆点
+                drawCircle(Color.White, radius = er * 0.35f,
+                    center = Offset(lx + eyeW * 0.5f + er * 0.3f, eyeY + eyeH * 0.5f - er * 0.3f))
+                drawCircle(Color.White, radius = er * 0.35f,
+                    center = Offset(rx + eyeW * 0.5f + er * 0.3f, eyeY + eyeH * 0.5f - er * 0.3f))
+            }
+            // O 形空心嘴
+            drawCircle(FACE_DARK, radius = w * 0.040f, center = Offset(w * 0.50f, mouthY + h * 0.02f),
+                style = Stroke(width = w * 0.024f))
         }
+
+        // ===== 难过：八字眉 + 下垂眼 + 嘴角下弯 + 一滴泪 =====
         TangyuanFace.SAD -> {
-            if (closed) eyes() else {
-                drawRoundRect(FACE_DARK, Offset(lx, eyeY), Size(eyeW, eyeH),
-                    cornerRadius = CornerRadius(eyeW * 0.35f, eyeW * 0.5f))
-                drawRoundRect(FACE_DARK, Offset(rx, eyeY), Size(eyeW, eyeH),
-                    cornerRadius = CornerRadius(eyeW * 0.35f, eyeW * 0.5f))
+            if (!closed) {
+                // 八字眉（外上扬内下压）
+                drawLine(FACE_DARK, Offset(lx - eyeW * 0.35f, eyeY - eyeH * 0.6f),
+                    Offset(lx + eyeW * 0.8f, eyeY - eyeH * 0.2f), strokeWidth = w * 0.018f)
+                drawLine(FACE_DARK, Offset(rx + eyeW * 1.35f, eyeY - eyeH * 0.6f),
+                    Offset(rx + eyeW * 0.2f, eyeY - eyeH * 0.2f), strokeWidth = w * 0.018f)
+                // 下垂眼（上眼皮下压成下弯弧）
+                val lp = Path().apply {
+                    moveTo(lx - eyeW * 0.1f, eyeY + eyeH * 0.15f)
+                    quadraticTo(lx + eyeW * 0.5f, eyeY + eyeH * 0.75f, lx + eyeW * 1.1f, eyeY + eyeH * 0.15f)
+                }
+                drawPath(lp, FACE_DARK, style = Stroke(width = w * 0.020f))
+                val rp = Path().apply {
+                    moveTo(rx - eyeW * 0.1f, eyeY + eyeH * 0.15f)
+                    quadraticTo(rx + eyeW * 0.5f, eyeY + eyeH * 0.75f, rx + eyeW * 1.1f, eyeY + eyeH * 0.15f)
+                }
+                drawPath(rp, FACE_DARK, style = Stroke(width = w * 0.020f))
             }
+            // 嘴角下弯
             val p = Path().apply {
-                moveTo(w * 0.45f, mouthY + h * 0.06f)
-                quadraticTo(w * 0.50f, mouthY, w * 0.55f, mouthY + h * 0.06f)
+                moveTo(w * 0.45f, mouthY + h * 0.07f)
+                quadraticTo(w * 0.50f, mouthY + h * 0.02f, w * 0.55f, mouthY + h * 0.07f)
             }
             drawPath(p, FACE_DARK, style = Stroke(width = w * 0.018f))
+            // 泪珠（左眼外下角，带高光）
+            val tearX = rx + eyeW * 1.25f
+            val tearY = eyeY + eyeH * 1.2f
+            drawOval(TEAR_BLUE, topLeft = Offset(tearX - w * 0.018f, tearY - h * 0.022f),
+                size = Size(w * 0.036f, h * 0.050f))
+            drawCircle(Color.White.copy(alpha = 0.9f), radius = w * 0.008f,
+                center = Offset(tearX + w * 0.005f, tearY - h * 0.012f))
         }
+
+        // ===== 生气：倒竖眉 + 波浪咬牙嘴 + 头顶蒸汽（随 animPhase 动） =====
         TangyuanFace.ANGRY -> {
-            // >_< 眼
-            val lp = Path().apply {
-                moveTo(lx - eyeW * 0.1f, eyeY + eyeH * 0.9f)
-                lineTo(lx + eyeW * 0.6f, eyeY)
+            // 眼睛 >_<
+            if (!closed) {
+                val lp = Path().apply {
+                    moveTo(lx - eyeW * 0.1f, eyeY + eyeH * 0.9f)
+                    lineTo(lx + eyeW * 0.6f, eyeY)
+                }
+                drawPath(lp, FACE_DARK, style = Stroke(width = w * 0.022f))
+                val lp2 = Path().apply {
+                    moveTo(lx + eyeW * 1.1f, eyeY + eyeH * 0.9f)
+                    lineTo(lx + eyeW * 0.4f, eyeY)
+                }
+                drawPath(lp2, FACE_DARK, style = Stroke(width = w * 0.022f))
+                val rp = Path().apply {
+                    moveTo(rx - eyeW * 0.1f, eyeY + eyeH * 0.9f)
+                    lineTo(rx + eyeW * 0.6f, eyeY)
+                }
+                drawPath(rp, FACE_DARK, style = Stroke(width = w * 0.022f))
+                val rp2 = Path().apply {
+                    moveTo(rx + eyeW * 1.1f, eyeY + eyeH * 0.9f)
+                    lineTo(rx + eyeW * 0.4f, eyeY)
+                }
+                drawPath(rp2, FACE_DARK, style = Stroke(width = w * 0.022f))
+                // 倒竖眉
+                drawLine(FACE_DARK, Offset(lx - eyeW * 0.35f, eyeY - eyeH * 0.6f),
+                    Offset(lx + eyeW * 0.9f, eyeY - eyeH * 0.1f), strokeWidth = w * 0.020f)
+                drawLine(FACE_DARK, Offset(rx + eyeW * 1.35f, eyeY - eyeH * 0.6f),
+                    Offset(rx + eyeW * 0.1f, eyeY - eyeH * 0.1f), strokeWidth = w * 0.020f)
             }
-            drawPath(lp, FACE_DARK, style = Stroke(width = w * 0.022f))
-            val lp2 = Path().apply {
-                moveTo(lx + eyeW * 1.1f, eyeY + eyeH * 0.9f)
-                lineTo(lx + eyeW * 0.4f, eyeY)
-            }
-            drawPath(lp2, FACE_DARK, style = Stroke(width = w * 0.022f))
-            val rp = Path().apply {
-                moveTo(rx - eyeW * 0.1f, eyeY + eyeH * 0.9f)
-                lineTo(rx + eyeW * 0.6f, eyeY)
-            }
-            drawPath(rp, FACE_DARK, style = Stroke(width = w * 0.022f))
-            val rp2 = Path().apply {
-                moveTo(rx + eyeW * 1.1f, eyeY + eyeH * 0.9f)
-                lineTo(rx + eyeW * 0.4f, eyeY)
-            }
-            drawPath(rp2, FACE_DARK, style = Stroke(width = w * 0.022f))
+            // 波浪咬牙嘴
             val p = Path().apply {
-                moveTo(w * 0.45f, mouthY + h * 0.05f)
-                quadraticTo(w * 0.50f, mouthY - h * 0.02f, w * 0.55f, mouthY + h * 0.05f)
+                moveTo(w * 0.44f, mouthY + h * 0.06f)
+                quadraticTo(w * 0.47f, mouthY, w * 0.50f, mouthY + h * 0.06f)
+                quadraticTo(w * 0.53f, mouthY, w * 0.56f, mouthY + h * 0.06f)
             }
-            drawPath(p, FACE_DARK, style = Stroke(width = w * 0.018f))
+            drawPath(p, FACE_DARK, style = Stroke(width = w * 0.016f))
+            // 头顶蒸汽：两缕往上飘
+            for (i in 0 until 2) {
+                val baseX = w * (0.42f + i * 0.16f)
+                val t = ((animPhase * 0.8f + i * 0.5f) % 1f)
+                val sy = h * 0.06f - t * h * 0.16f
+                val alpha = (1f - t).coerceIn(0f, 1f) * 0.7f
+                drawOval(
+                    Color(0x88FFFFFF).copy(alpha = alpha),
+                    topLeft = Offset(baseX - w * 0.02f, sy - h * 0.02f),
+                    size = Size(w * 0.04f, h * 0.045f),
+                )
+            }
         }
+
+        // ===== 害羞：眼神躲闪（往左瞟）+ 大脸红 + 抿嘴小波浪 =====
         TangyuanFace.SHY -> {
-            // 眼睛看别处（偏左下）
-            if (closed) eyes() else {
-                drawRoundRect(FACE_DARK, Offset(lx - eyeW * 0.25f, eyeY + eyeH * 0.15f),
-                    Size(eyeW, eyeH), cornerRadius = CornerRadius(eyeW * 0.3f))
-                drawRoundRect(FACE_DARK, Offset(rx - eyeW * 0.25f, eyeY + eyeH * 0.15f),
-                    Size(eyeW, eyeH), cornerRadius = CornerRadius(eyeW * 0.3f))
+            if (!closed) {
+                // 眼睛往左上看：瞳孔偏左上
+                drawRoundRect(FACE_DARK, Offset(lx - eyeW * 0.45f, eyeY - eyeH * 0.1f), Size(eyeW, eyeH),
+                    cornerRadius = CornerRadius(eyeW * 0.3f))
+                drawRoundRect(FACE_DARK, Offset(rx - eyeW * 0.45f, eyeY - eyeH * 0.1f), Size(eyeW, eyeH),
+                    cornerRadius = CornerRadius(eyeW * 0.3f))
+                // 高光
+                drawCircle(EDGE_PIXEL, radius = eyeW * 0.28f, center = Offset(lx - eyeW * 0.3f, eyeY - eyeH * 0.05f))
+                drawCircle(EDGE_PIXEL, radius = eyeW * 0.28f, center = Offset(rx - eyeW * 0.3f, eyeY - eyeH * 0.05f))
             }
-            blush()
-            // 抿嘴：一条横线
-            drawLine(FACE_DARK, Offset(w * 0.455f, mouthY + h * 0.02f),
-                Offset(w * 0.545f, mouthY + h * 0.02f), strokeWidth = w * 0.018f)
+            blush(strong = true)
+            // 抿嘴：小波浪
+            val p = Path().apply {
+                moveTo(w * 0.455f, mouthY + h * 0.02f)
+                quadraticTo(w * 0.50f, mouthY + h * 0.07f, w * 0.545f, mouthY + h * 0.02f)
+            }
+            drawPath(p, FACE_DARK, style = Stroke(width = w * 0.016f))
         }
+
+        // ===== 心动：星星眼（闪高光）+ 张嘴笑 + 飘小爱心 =====
         TangyuanFace.HEART -> {
-            // 弯月笑眼
-            if (closed) eyes() else {
+            if (!closed) {
+                // 星星眼：弯月 + 大高光
                 drawArc(FACE_DARK, 200f, 140f, false,
-                    topLeft = Offset(lx, eyeY - eyeH * 0.3f), size = Size(eyeW * 1.6f, eyeH * 1.2f),
+                    topLeft = Offset(lx, eyeY - eyeH * 0.35f), size = Size(eyeW * 1.7f, eyeH * 1.3f),
                     style = Stroke(width = eyeW * 0.28f))
                 drawArc(FACE_DARK, 200f, 140f, false,
-                    topLeft = Offset(rx, eyeY - eyeH * 0.3f), size = Size(eyeW * 1.6f, eyeH * 1.2f),
+                    topLeft = Offset(rx, eyeY - eyeH * 0.35f), size = Size(eyeW * 1.7f, eyeH * 1.3f),
                     style = Stroke(width = eyeW * 0.28f))
+                // 高光闪（随 animPhase）
+                val tw = 0.5f + 0.5f * sin(animPhase * 4f)
+                drawCircle(Color.White.copy(alpha = 0.6f + 0.4f * tw),
+                    radius = eyeW * 0.45f, center = Offset(lx + eyeW * 0.5f, eyeY + eyeH * 0.3f))
+                drawCircle(Color.White.copy(alpha = 0.6f + 0.4f * tw),
+                    radius = eyeW * 0.45f, center = Offset(rx + eyeW * 0.5f, eyeY + eyeH * 0.3f))
             }
             blush()
-            // 张嘴笑
+            // 张嘴开心笑
             val p = Path().apply {
                 moveTo(w * 0.44f, mouthY)
-                quadraticTo(w * 0.50f, mouthY + h * 0.14f, w * 0.56f, mouthY)
+                quadraticTo(w * 0.50f, mouthY + h * 0.13f, w * 0.56f, mouthY)
                 close()
             }
             drawPath(p, FACE_DARK)
+            // 小爱心：两粒往上飘
+            for (i in 0 until 2) {
+                val t = ((animPhase * 0.6f + i * 0.5f) % 1f)
+                val px = w * (0.44f + i * 0.12f) + sin(animPhase + i) * w * 0.015f
+                val py = h * 0.30f - t * h * 0.22f
+                val alpha = when {
+                    t < 0.2f -> t / 0.2f
+                    t > 0.7f -> (1f - t) / 0.3f
+                    else -> 1f
+                }.coerceIn(0f, 1f)
+                val sz = w * 0.045f * (1f - t * 0.3f)
+                drawHeartSmall(Offset(px, py), sz, HEART_RED.copy(alpha = alpha * 0.9f))
+            }
         }
     }
+}
+
+/** 画一颗小爱心（带锯齿边的简易版） */
+private fun DrawScope.drawHeartSmall(center: Offset, size: Float, color: Color) {
+    val s = size
+    val path = Path().apply {
+        // 两个圆弧 + V 尖
+        moveTo(center.x, center.y + s * 0.95f)
+        cubicTo(center.x - s * 0.5f, center.y + s * 0.35f, center.x - s * 1.1f, center.y - s * 0.1f,
+            center.x, center.y - s * 0.55f)
+        cubicTo(center.x + s * 1.1f, center.y - s * 0.1f, center.x + s * 0.5f, center.y + s * 0.35f,
+            center.x, center.y + s * 0.95f)
+        close()
+    }
+    drawPath(path, color)
 }
