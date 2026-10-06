@@ -15,6 +15,7 @@
 package me.rerere.rikkahub.ui.pages.chat
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.VectorConverter
@@ -172,6 +173,7 @@ fun TangyuanPet(
     var idleTimer by remember { mutableFloatStateOf(0f) } // 秒
     var zzPhase by remember { mutableFloatStateOf(0f) }   // 💤 飘动画相位
     var wobble by remember { mutableFloatStateOf(0f) }     // 轮廓蠕动相位（液体感）
+    var cloudPhase by remember { mutableFloatStateOf(0f) } // 乌云飘动相位
 
     // 表情覆盖（互动时临时切换），无覆盖时用传进来的 face
     var faceOverride by remember { mutableStateOf<TangyuanFace?>(null) }
@@ -283,14 +285,27 @@ fun TangyuanPet(
     }
 
     val idle = rememberInfiniteTransition(label = "ty-idle")
-    val breathe by idle.animateFloat(
+    // 醒着：2.4 秒一次，浅浅的
+    val breatheAwake by idle.animateFloat(
         initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(2400, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
-        label = "breathe",
+        label = "breathe-awake",
     )
+    // 睡着：4.2 秒一次，幅度更大（肚子一起一伏）
+    val breatheSleep by idle.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "breathe-sleep",
+    )
+    val breathe = breatheAwake
+    val breathAmp = if (sleeping) 0.085f else 0.025f
+    val breathVal = if (sleeping) breatheSleep else breatheAwake
 
     // 地面：
     //   groundY > 0 → 容器内绝对 y（旧用法）
@@ -422,6 +437,7 @@ fun TangyuanPet(
                 }
             }
             if (sleeping) zzPhase += dt * 0.22f
+            cloudPhase += dt * 0.7f
 
             if (dragging) {
                 bobPhase += dt * 9f
@@ -517,7 +533,7 @@ fun TangyuanPet(
             val bob = if (state == PetState.WALK && !dragging && !sleeping) {
                 sin(bobPhase) * bobAmpPx
             } else 0f
-            val idleS = 1f + breathe * 0.025f
+            val idleS = 1f + breathVal * breathAmp
 
             Box(
                 modifier = Modifier
@@ -586,7 +602,7 @@ fun TangyuanPet(
                         )
                     }
                     .drawBehind {
-                        drawTangyuan(effectiveFace, blink, sleeping, zzPhase, wobble)
+                        drawTangyuan(effectiveFace, blink, sleeping, zzPhase, wobble, cloudPhase)
                     },
             ) {
                 // 长按菜单：贴着头顶弹出
@@ -632,6 +648,7 @@ private fun DrawScope.drawTangyuan(
     sleeping: Boolean,
     zzPhase: Float,
     wobble: Float,
+    cloudPhase: Float = 0f,
 ) {
     val w = size.width
     val h = size.height
