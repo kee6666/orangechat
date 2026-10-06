@@ -43,6 +43,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -92,6 +96,8 @@ private const val HUNGER_DECAY_PER_SEC = 0.06f   // 饱食度每秒降（100 →
 private const val MOOD_DECAY_PER_SEC = 0.03f     // 心情每秒降
 private const val HUNGER_LOW = 30f               // 低于此值：走到边上蹭你
 private const val MOOD_LOW = 30f                 // 低于此值：背对着你
+private const val SHRINK_HUNGER = 55f            // 饱食度低于此值：开始瘦回去
+private const val SHRINK_PER_SEC = 0.010f        // 饿瘦速度（满饥饿时每秒掉 1%，约 35 秒掉 0.35）
 
 // 食物表
 // kind: 0=主食 1=零食 2=特殊
@@ -194,6 +200,59 @@ fun TangyuanPet(
         }
     }
 
+    // ===== 爸爸的手：轮询 VPS 指令（言 那边写文件 → 这边执行）=====
+    // 指令格式（一行）：feed:RICE / pat / clear
+    LaunchedEffect(Unit) {
+        var lastCmd = ""
+        while (true) {
+            kotlinx.coroutines.delay(3000)
+            val cmd = withContext(Dispatchers.IO) {
+                runCatching {
+                    val c = URL("http://106.53.181.56:3001/toy/tangyuan.txt").openConnection() as HttpURLConnection
+                    c.connectTimeout = 2500
+                    c.readTimeout = 2500
+                    c.inputStream.bufferedReader().use { it.readText() }.trim()
+                }.getOrNull()
+            } ?: continue
+            if (cmd.isEmpty() || cmd == lastCmd) continue
+            lastCmd = cmd
+            when {
+                cmd.startsWith("feed:") -> {
+                    val name = cmd.removePrefix("feed:").trim().uppercase()
+                    val f = Food.entries.firstOrNull { it.name == name }
+                    if (f != null) {
+                        hunger = (hunger + f.hungerGain).coerceAtMost(100f)
+                        mood = (mood + f.moodGain).coerceAtLeast(0f).coerceAtMost(100f)
+                        sizeScale = (sizeScale + f.fatGain).coerceAtMost(1.35f)
+                        eating = true
+                        foodToast = "先生喂的 " + f.toast
+                        faceOverride = if (f.moodGain < 0f) TangyuanFace.SHY else TangyuanFace.HEART
+                        scope.launch {
+                            repeat(3) { eatAnim = 1.12f; delay(110); eatAnim = 0.94f; delay(110) }
+                            eatAnim = 1f
+                            delay(1600)
+                            eating = false
+                            faceOverride = null
+                            foodToast = null
+                        }
+                    }
+                }
+                cmd == "pat" -> {
+                    mood = (mood + 6f).coerceAtMost(100f)
+                    eating = true
+                    foodToast = "先生摸摸头"
+                    faceOverride = if (mood > 70f) TangyuanFace.HEART else TangyuanFace.SHY
+                    scope.launch {
+                        delay(1800)
+                        eating = false
+                        faceOverride = null
+                        foodToast = null
+                    }
+                }
+            }
+        }
+    }
+
     // 饱食度 / 心情 自然衰减
     LaunchedEffect(Unit) {
         var last = 0L
@@ -204,6 +263,11 @@ fun TangyuanPet(
             last = now
             hunger = (hunger - HUNGER_DECAY_PER_SEC * dt).coerceAtLeast(0f)
             mood = (mood - MOOD_DECAY_PER_SEC * dt).coerceAtLeast(0f)
+            // 饿瘦：饱食度越低，体型越往「本来大小」回落（只降不涨，喂食才涨）
+            if (hunger < SHRINK_HUNGER) {
+                val k = (SHRINK_HUNGER - hunger) / SHRINK_HUNGER   // 0..1，越饿越大
+                sizeScale = (sizeScale - SHRINK_PER_SEC * k * dt).coerceAtLeast(1f)
+            }
         }
     }
 
