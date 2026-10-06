@@ -99,6 +99,8 @@ private const val HUNGER_LOW = 30f               // 低于此值：走到边上�
 private const val MOOD_LOW = 30f                 // 低于此值：背对着你
 private const val SHRINK_HUNGER = 55f            // 饱食度低于此值：开始瘦回去
 private const val SHRINK_PER_SEC = 0.010f        // 饿瘦速度（满饥饿时每秒掉 1%，约 35 秒掉 0.35）
+private const val FAT_LIMIT = 1.12f               // 体型超过此值：太胖，自动开始运动减肥
+private const val EXERCISE_SHRINK_PER_SEC = 0.018f // 运动消耗板油速度（每秒掉 1.8%）
 
 // 食物表
 // kind: 0=主食 1=零食 2=特殊
@@ -177,6 +179,8 @@ fun TangyuanPet(
     var zzPhase by remember { mutableFloatStateOf(0f) }   // 💤 飘动画相位
     var wobble by remember { mutableFloatStateOf(0f) }     // 轮廓蠕动相位（液体感）
     var animPhase by remember { mutableFloatStateOf(0f) } // 表情动作相位（抖/蹦/蒸汽/飘心共用）
+    var exercising by remember { mutableStateOf(false) }  // 运动减肥中（太胖自动蹦跶）
+    var exercisePhase by remember { mutableFloatStateOf(0f) } // 蹦跶相位
 
     // 表情覆盖（互动时临时切换），无覆盖时用传进来的 face
     var faceOverride by remember { mutableStateOf<TangyuanFace?>(null) }
@@ -441,6 +445,15 @@ fun TangyuanPet(
             }
             if (sleeping) zzPhase += dt * 0.22f
             animPhase += dt * 10f
+            // 运动减肥：太胖就自己蹦跶消耗板油（被拖/被喂/睡着时不给动）
+            val tooFat = sizeScale > FAT_LIMIT
+            exercising = tooFat && !dragging && !eating && !sleeping
+            if (exercising) {
+                exercisePhase += dt * 6f
+                sizeScale = (sizeScale - EXERCISE_SHRINK_PER_SEC * dt).coerceAtLeast(1f)
+            } else {
+                exercisePhase = 0f
+            }
 
             if (dragging) {
                 bobPhase += dt * 9f
@@ -543,7 +556,8 @@ fun TangyuanPet(
                     .offset {
                         // 表情配动作：害羞=高频小抖，心动=原地轻蹦
                         val actX = if (effectiveFace == TangyuanFace.SHY) sin(animPhase * 40f) * 1.2f else 0f
-                        val actY = if (effectiveFace == TangyuanFace.HEART) -abs(sin(animPhase * 8f)) * 2.5f else 0f
+                        val actY = if (exercising) abs(sin(exercisePhase)) * 7f
+                            else if (effectiveFace == TangyuanFace.HEART) -abs(sin(animPhase * 8f)) * 2.5f else 0f
                         IntOffset(
                             (posX.value + leanX + actX).roundToInt(),
                             (posY.value + bob + actY).roundToInt(),
@@ -608,7 +622,7 @@ fun TangyuanPet(
                         )
                     }
                     .drawBehind {
-                        drawTangyuan(effectiveFace, blink, sleeping, zzPhase, wobble, animPhase)
+                        drawTangyuan(effectiveFace, blink, sleeping, zzPhase, wobble, animPhase, exercising)
                     },
             ) {
                 // 长按菜单：贴着头顶弹出
@@ -655,6 +669,7 @@ private fun DrawScope.drawTangyuan(
     zzPhase: Float,
     wobble: Float,
     animPhase: Float = 0f,
+    exercising: Boolean = false,
 ) {
     val w = size.width
     val h = size.height
@@ -754,6 +769,9 @@ private fun DrawScope.drawTangyuan(
 
     // ⑤ 睡觉时右上角飘 💤
     if (sleeping) drawSleepZ(w, h, zzPhase)
+
+    // ⑤b 运动时头顶冒汗
+    if (exercising) drawSweat(w, h, animPhase)
 }
 
 /** 会蠕动的椭圆路径：一圈点，半径带正弦扰动 → 液体/果冻感（完美闭合） */
@@ -1074,4 +1092,22 @@ private fun DrawScope.drawHeartSmall(center: Offset, size: Float, color: Color) 
         close()
     }
     drawPath(path, color)
+}
+
+
+/** 运动的汗滴：头顶两侧小汗珠往外飘、淡出 */
+private fun DrawScope.drawSweat(w: Float, h: Float, phase: Float) {
+    for (i in 0 until 3) {
+        val tt = ((phase * 0.5f + i * 0.33f) % 1f)
+        val px = w * (0.30f + i * 0.20f) + sin(phase * 1.3f + i) * w * 0.015f
+        val py = h * 0.16f - tt * h * 0.12f
+        val alpha = (1f - tt).coerceIn(0.3f, 1f)
+        // 汗珠：小椭圆 + 高光
+        drawOval(TEAR_BLUE.copy(alpha = 0.55f * alpha),
+            topLeft = Offset(px - w * 0.014f, py - h * 0.020f),
+            size = Size(w * 0.028f, h * 0.040f))
+        drawOval(Color.White.copy(alpha = 0.75f * alpha),
+            topLeft = Offset(px - w * 0.009f, py - h * 0.015f),
+            size = Size(w * 0.009f, h * 0.013f))
+    }
 }
