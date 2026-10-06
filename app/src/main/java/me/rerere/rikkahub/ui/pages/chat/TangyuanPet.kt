@@ -369,14 +369,34 @@ fun TangyuanPet(
 
     // ===== 摸头 =====
     var petHeadCounter by remember { mutableFloatStateOf(0f) }
-    fun petHead(amount: Float) {
+    var leanX by remember { mutableFloatStateOf(0f) }      // 被摸时的重心偏移（px，+右 -左）
+    var leanPhase by remember { mutableFloatStateOf(0f) }  // 摸头相位：0=没在摸
+    fun petHead(amount: Float, x: Float) {
         petHeadCounter += amount
         mood = (mood + amount * 0.06f).coerceAtMost(100f)
-        faceOverride = if (mood > 70f) TangyuanFace.HEART else TangyuanFace.SHY
         idleTimer = 0f
         sleeping = false
+        // 手指在汤圆左边就往左倒，右边就往右倒（重心朝被摸的那一侧）
+        val toward = if (containerW > 0f) {
+            val center = posX.value + bodyWpx * 0.5f
+            ((x - center) / (bodyWpx * 0.5f)).coerceIn(-1f, 1f)
+        } else 0f
         scope.launch {
-            delay(700)
+            // ① 先愣半拍：什么都没发生，像没反应过来谁碰它
+            delay(150)
+            // ② 往手的方向软下去（分两步，先大后小，像被按了一下）
+            leanPhase = 1f
+            leanX = toward * bodyWpx * 0.22f
+            delay(220)
+            // ③ 这时才慢慢变脸
+            if (!eating) faceOverride = if (mood > 70f) TangyuanFace.HEART else TangyuanFace.SHY
+            leanX = toward * bodyWpx * 0.13f
+            // ④ 停一下，享受一会儿
+            delay(620)
+            // ⑤ 回正 + 表情收回去
+            leanX = 0f
+            leanPhase = 0f
+            delay(260)
             if (!eating) faceOverride = null
         }
     }
@@ -502,20 +522,25 @@ fun TangyuanPet(
             Box(
                 modifier = Modifier
                     .offset {
-                        IntOffset(posX.value.roundToInt(), (posY.value + bob).roundToInt())
+                        IntOffset(
+                            (posX.value + leanX).roundToInt(),
+                            (posY.value + bob).roundToInt(),
+                        )
                     }
                     .size(width = BODY_W.dp, height = BODY_H.dp)
                     .graphicsLayer {
                         val sy = stretchY * (if (dragging || state == PetState.WALK) 1f else idleS)
                         val sx = 1f - (sy - 1f) * 0.28f
+                        // 被摸时软下去：横向胖一点、纵向扁一点（0.94 压扁系数）
+                        val squish = 1f - leanPhase * 0.06f
                         // 体型（吃多变胖）+ 咀嚼动画
                         val body = sizeScale * eatAnim
-                        scaleX = (sx * body).coerceIn(0.60f, 1.60f)
-                        scaleY = (sy * body).coerceIn(0.60f, 1.60f)
+                        scaleX = (sx * body / squish).coerceIn(0.60f, 1.60f)
+                        scaleY = (sy * body * squish).coerceIn(0.60f, 1.60f)
                     }
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onTap = { petHead(1f) },          // 轻点 = 摸头
+                            onTap = { off -> petHead(1f, off.x) },   // 轻点 = 摸头（带位置）
                             onLongPress = { menuOpen = true }, // 长按 = 打开喂食菜单
                         )
                     }
