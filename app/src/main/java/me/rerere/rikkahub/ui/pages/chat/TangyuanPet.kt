@@ -160,19 +160,9 @@ fun TangyuanPet(
         }
     }
 
-    // 地面变化（键盘弹起/落下）→ 汤圆跟着地面走
-    //   地面抬高（键盘弹起）→ 直接抬上去（贴地的才抬）
-    //   地面降低（键盘收起）→ 不硬拽，靠重力自然掉下去
-    LaunchedEffect(restTopY, containerH) {
-        if (!ready || dragging) return@LaunchedEffect
-        val target = restTopY
-        val current = posY.value
-        // 只有"本来就在地面附近"的汤圆才跟着抬；被扔在半空的让它自己落
-        if (current > target && current - target < bodyHpx * 2.5f) {
-            posY.animateTo(target, tween(180))
-            velY = 0f
-        }
-    }
+    // 地面因键盘变化时：只处理"汤圆在地面下方"的情况（防止被键盘/输入框压住）
+    // 注意：不做 animateTo 动画、不改 velY —— 交给重力自己处理，避免和物理循环打架
+    // （v19/v20 的教训：LaunchedEffect(restTopY) 会在键盘动画期间每帧触发，把 velY 拍成 0 → 汤圆悬空）
 
     // 眨眼循环：每 3~6 秒眨一次，每次 0.15 秒
     LaunchedEffect(ready, sleeping) {
@@ -216,6 +206,11 @@ fun TangyuanPet(
 
             // 重力：睡觉时也照常下落（只停走路的随机行为，不停物理）
             run {
+                // 地面抬高（键盘弹起）时：若汤圆被压到地面以下，直接顶上去，不动速度
+                if (ready && posY.value > restTopY) {
+                    posY.snapTo(restTopY)
+                    if (velY > 0f) velY = 0f
+                }
                 velY += GRAVITY * dt
                 var newY = posY.value + velY * dt
                 var newX = posX.value +
