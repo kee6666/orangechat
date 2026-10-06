@@ -94,10 +94,26 @@ private const val HUNGER_LOW = 30f               // 低于此值：走到边上�
 private const val MOOD_LOW = 30f                 // 低于此值：背对着你
 
 // 食物表
-private enum class Food(val label: String, val emoji: String) {
-    RICE("正经饭", "🍚"),
-    SWEET("甜食", "🍬"),
-    PEACH("桃子", "🍑"),
+// kind: 0=主食 1=零食 2=特殊
+private enum class Food(
+    val label: String,
+    val emoji: String,
+    val kind: Int,
+    val hungerGain: Float,
+    val moodGain: Float,
+    val fatGain: Float,
+    val toast: String,
+) {
+    // 主食
+    RICE("白饭", "🍚", 0, 28f, 8f, 0.035f, "🍚 咕嘟…吃饱了，长胖一点点"),
+    NOODLE("面条", "🍜", 0, 24f, 10f, 0.028f, "🍜 吸溜吸溜，热乎"),
+    MILK("温牛奶", "🥛", 0, 16f, 6f, 0.012f, "🥛 暖到肚子里了"),
+    // 零食
+    CANDY("糖", "🍬", 1, 10f, 14f, 0.020f, "🍬 甜！兴奋得原地转圈"),
+    CAKE("蛋糕", "🍰", 1, 20f, 18f, 0.045f, "🍰 奶油糊一脸，开心"),
+    // 特殊
+    PEACH("桃子", "🍑", 2, 5f, -12f, 0.0f, "🍑 过敏了！浑身发抖…要哄"),
+    SPICY("辣条", "🌶️", 2, 12f, 22f, 0.030f, "🌶️ 爽！…然后肚子开始叫了"),
 }
 
 // 配色
@@ -258,27 +274,17 @@ fun TangyuanPet(
             return
         }
         eating = true
-        mood = (mood + 8f).coerceAtMost(100f)
-        when (food) {
-            Food.RICE -> {
-                hunger = (hunger + 28f).coerceAtMost(100f)
-                sizeScale = (sizeScale + 0.035f).coerceAtMost(1.35f)
-                foodToast = "🍚 咕嘟…吃饱了，长胖一点点"
-                faceOverride = TangyuanFace.HAPPY
-            }
-            Food.SWEET -> {
-                hunger = (hunger + 18f).coerceAtMost(100f)
-                sizeScale = (sizeScale + 0.02f).coerceAtMost(1.35f)
-                foodToast = "🍬 甜！兴奋得原地转圈"
-                faceOverride = TangyuanFace.HEART
-            }
-            Food.PEACH -> {
-                // 过敏：不加饱食度，扣心情，发抖脸红
-                hunger = (hunger + 5f).coerceAtMost(100f)
-                mood = (mood - 12f).coerceAtLeast(0f)
-                foodToast = "🍑 过敏了！浑身发抖…要哄"
-                faceOverride = TangyuanFace.SHY
-            }
+        // 通用：全部从食物表里取值
+        hunger = (hunger + food.hungerGain).coerceAtMost(100f)
+        mood = (mood + food.moodGain).coerceAtLeast(0f).coerceAtMost(100f)
+        sizeScale = (sizeScale + food.fatGain).coerceAtMost(1.35f)
+        foodToast = food.toast
+        // 表情：按食物类型 + 心情涨跌决定
+        faceOverride = when {
+            food.moodGain < 0f -> TangyuanFace.SHY   // 过敏：发抖脸红
+            food.kind == 1 -> TangyuanFace.HEART      // 零食：爽
+            food.kind == 2 -> TangyuanFace.SURPRISED  // 特殊：一口下去先愣
+            else -> TangyuanFace.HAPPY                // 主食：满足
         }
         scope.launch {
             // 咀嚼动画
