@@ -24,6 +24,11 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -32,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,9 +57,11 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -78,6 +86,19 @@ private const val WALK_SPEED = 58f
 private const val WALK_BOB_AMP = 2.4f
 private const val BOTTOM_GAP = 14f
 private const val SLEEP_AFTER_SEC = 45f   // 多久没互动就睡
+
+// ===== 「活」系统参数 =====
+private const val HUNGER_DECAY_PER_SEC = 0.06f   // 饱食度每秒降（100 → 0 约 28 分钟）
+private const val MOOD_DECAY_PER_SEC = 0.03f     // 心情每秒降
+private const val HUNGER_LOW = 30f               // 低于此值：走到边上蹭你
+private const val MOOD_LOW = 30f                 // 低于此值：背对着你
+
+// 食物表
+private enum class Food(val label: String, val emoji: String) {
+    RICE("正经饭", "🍚"),
+    SWEET("甜食", "🍬"),
+    PEACH("桃子", "🍑"),
+}
 
 // 配色
 private val CORE_HOT = Color(0xFFFFFDF6)
@@ -129,7 +150,54 @@ fun TangyuanPet(
 
     // 表情覆盖（互动时临时切换），无覆盖时用传进来的 face
     var faceOverride by remember { mutableStateOf<TangyuanFace?>(null) }
-    val effectiveFace = faceOverride ?: if (sleeping) TangyuanFace.SLEEPY else face
+
+    // ===== 「活」系统状态 =====
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("tangyuan_alive", android.content.Context.MODE_PRIVATE) }
+
+    var hunger by remember { mutableFloatStateOf(prefs.getFloat("hunger", 75f)) }
+    var mood by remember { mutableFloatStateOf(prefs.getFloat("mood", 80f)) }
+    var sizeScale by remember { mutableFloatStateOf(prefs.getFloat("sizeScale", 1f)) }
+    var lastSaveAt by remember { mutableLongStateOf(0L) }
+
+    var menuOpen by remember { mutableStateOf(false) }        // 长按菜单
+    var eating by remember { mutableStateOf(false) }          // 正在吃
+    var foodToast by remember { mutableStateOf<String?>(null) } // 吃完的提示文字
+    var eatAnim by remember { mutableFloatStateOf(1f) }        // 咀嚼动画缩放
+
+    // 存档：饱食度/心情/体型（每 5 秒落一次盘）
+    LaunchedEffect(hunger, mood, sizeScale) {
+        val nowMs = System.currentTimeMillis()
+        if (nowMs - lastSaveAt > 5000L) {
+            lastSaveAt = nowMs
+            prefs.edit()
+                .putFloat("hunger", hunger)
+                .putFloat("mood", mood)
+                .putFloat("sizeScale", sizeScale)
+                .apply()
+        }
+    }
+
+    // 饱食度 / 心情 自然衰减
+    LaunchedEffect(Unit) {
+        var last = 0L
+        while (true) {
+            val now = withFrameNanos { it }
+            if (last == 0L) { last = now; continue }
+            val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.1f)
+            last = now
+            hunger = (hunger - HUNGER_DECAY_PER_SEC * dt).coerceAtLeast(0f)
+            mood = (mood - MOOD_DECAY_PER_SEC * dt).coerceAtLeast(0f)
+        }
+    }
+
+    val effectiveFace = faceOverride ?: when {
+        sleeping -> TangyuanFace.SLEEPY
+        eating -> TangyuanFace.HAPPY
+        hunger < HUNGER_LOW -> TangyuanFace.SAD
+        mood < MOOD_LOW -> TangyuanFace.ANGRY
+        else -> face
+    }
 
     val idle = rememberInfiniteTransition(label = "ty-idle")
     val breathe by idle.animateFloat(
@@ -172,6 +240,71 @@ fun TangyuanPet(
             blink = 1f
             delay(150)
             blink = 0f
+        }
+    }
+
+    // ===== 喂食 =====
+    fun feed(food: Food) {
+        if (eating) return
+        // 吃饱了拒食
+        if (hunger >= 92f) {
+            faceOverride = TangyuanFace.ANGRY
+            foodToast = "吃不下了，撑着呢"
+            scope.launch {
+                delay(1600)
+                faceOverride = null
+                foodToast = null
+            }
+            return
+        }
+        eating = true
+        mood = (mood + 8f).coerceAtMost(100f)
+        when (food) {
+            Food.RICE -> {
+                hunger = (hunger + 28f).coerceAtMost(100f)
+                sizeScale = (sizeScale + 0.035f).coerceAtMost(1.35f)
+                foodToast = "🍚 咕嘟…吃饱了，长胖一点点"
+                faceOverride = TangyuanFace.HAPPY
+            }
+            Food.SWEET -> {
+                hunger = (hunger + 18f).coerceAtMost(100f)
+                sizeScale = (sizeScale + 0.02f).coerceAtMost(1.35f)
+                foodToast = "🍬 甜！兴奋得原地转圈"
+                faceOverride = TangyuanFace.HEART
+            }
+            Food.PEACH -> {
+                // 过敏：不加饱食度，扣心情，发抖脸红
+                hunger = (hunger + 5f).coerceAtMost(100f)
+                mood = (mood - 12f).coerceAtLeast(0f)
+                foodToast = "🍑 过敏了！浑身发抖…要哄"
+                faceOverride = TangyuanFace.SHY
+            }
+        }
+        scope.launch {
+            // 咀嚼动画
+            repeat(3) {
+                eatAnim = 1.12f; delay(110)
+                eatAnim = 0.94f; delay(110)
+            }
+            eatAnim = 1f
+            delay(1400)
+            eating = false
+            faceOverride = null
+            foodToast = null
+        }
+    }
+
+    // ===== 摸头 =====
+    var petHeadCounter by remember { mutableFloatStateOf(0f) }
+    fun petHead(amount: Float) {
+        petHeadCounter += amount
+        mood = (mood + amount * 0.06f).coerceAtMost(100f)
+        faceOverride = if (mood > 70f) TangyuanFace.HEART else TangyuanFace.SHY
+        idleTimer = 0f
+        sleeping = false
+        scope.launch {
+            delay(700)
+            if (!eating) faceOverride = null
         }
     }
 
@@ -281,8 +414,16 @@ fun TangyuanPet(
                     .graphicsLayer {
                         val sy = stretchY * (if (dragging || state == PetState.WALK) 1f else idleS)
                         val sx = 1f - (sy - 1f) * 0.28f
-                        scaleX = sx.coerceIn(0.88f, 1.12f)
-                        scaleY = sy.coerceIn(0.70f, 1.40f)
+                        // 体型（吃多变胖）+ 咀嚼动画
+                        val body = sizeScale * eatAnim
+                        scaleX = (sx * body).coerceIn(0.60f, 1.60f)
+                        scaleY = (sy * body).coerceIn(0.60f, 1.60f)
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { petHead(1f) },          // 轻点 = 摸头
+                            onLongPress = { menuOpen = true }, // 长按 = 打开喂食菜单
+                        )
                     }
                     .pointerInput(Unit) {
                         detectDragGestures(
@@ -328,7 +469,39 @@ fun TangyuanPet(
                     .drawBehind {
                         drawTangyuan(effectiveFace, blink, sleeping, zzPhase, wobble)
                     },
-            )
+            ) {
+                // 长按菜单：贴着头顶弹出
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                ) {
+                    Food.entries.forEach { f ->
+                        DropdownMenuItem(
+                            text = { Text("${f.emoji}  ${f.label}") },
+                            onClick = {
+                                menuOpen = false
+                                feed(f)
+                            },
+                        )
+                    }
+                }
+            }
+
+            // 吃完 / 拒食 的提示文字（飘在汤圆上方）
+            foodToast?.let { msg ->
+                Text(
+                    text = msg,
+                    color = Color(0xFF8A4412),
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (posX.value + bodyWpx * 0.5f - 60f).roundToInt(),
+                                (posY.value - 30f).roundToInt(),
+                            )
+                        },
+                )
+            }
         }
     }
 }
