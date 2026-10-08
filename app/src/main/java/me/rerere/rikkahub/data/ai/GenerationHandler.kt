@@ -590,41 +590,28 @@ class GenerationHandler(
                     appendLine("本次对话根据用户消息关键词只注入了部分工具。如果你判断当前任务需要某个不在列表里的工具，直接告诉用户：'这个需要用到XXX工具，你说一声我就调用'，引导用户说出关键词后再尝试。")
                 }
 
-                // AI侧引用能力：AI可以用markdown引用语法引用用户之前说过的话
+                // AI侧引用能力
                 if (true) {
                     appendLine()
                     appendLine()
                     appendLine("## 引用能力")
-                    appendLine("你可以引用用户之前说过的话（比如回应她提到过的旧事、纠正、强调某句话）。")
-                    appendLine("用法：在回复中先写一行引用，格式为 `> 用户原话`（markdown blockquote），可以多行引用，然后换行再写你的回复正文。")
-                    appendLine("这样用户看到的回复会带一个引用块，清楚知道你在回应她哪句话。")
-                    appendLine("注意：")
-                    appendLine("- 只在确实要引用用户原话时才用，不要为凑数而引用")
-                    appendLine("- 引用块要放在回复开头，正文在引用之后")
-                    appendLine("- 引用内容应尽量贴近用户原话，方便匹配")
+                    appendLine("可引用用户原话（回应旧事、纠正、强调时）：回复开头写 `> 原话`（markdown引用，可多行），换行后再写正文。只在确实需要引用时才用。")
                 }
  
-                // 屏幕跳转能力（AI总是可以跳转，不需要开关）
+                // 屏幕跳转能力
                 if (true) {
                     appendLine()
                     appendLine()
                     appendLine("## 屏幕跳转能力")
-                    appendLine("你可以在回复末尾追加 [JUMP] 标记（单独一行）来把聊天界面拉到用户屏幕最前面。")
-                    appendLine("适用场景：")
-                    appendLine("- 用户说要去别的应用，你觉得需要把用户拉回来时")
-                    appendLine("- 你觉得接下来的内容需要用户立即看到时")
-                    appendLine("不适用场景：")
-                    appendLine("- 一般闲聊不需要跳转")
-                    appendLine("- 用户正在跟你正常对话时不需要跳转")
-                    appendLine("[JUMP] 标记不会展示给用户，仅用于触发屏幕跳转。")
+                    appendLine("回复末尾加单独一行 [JUMP] 可把聊天界面拉到屏幕最前。需要用户立即看到内容或拉回她时用，一般闲聊和正常对话不用。[JUMP] 不展示给用户。")
                 }
  
-                // 分气泡: 告知模型它自己能控制消息如何被拆成多个气泡
+                // 分气泡
                 if (assistant.splitBubbleByLine) {
                     appendLine()
                     appendLine()
                     appendLine("## Message Bubbles")
-                    appendLine("Your reply will be automatically split into separate chat bubbles at every line break (\\n) you write, similar to how a person sends several short texts in a row instead of one long message. You are fully in control of this: write a line break whenever you want the previous thought/sentence to appear as its own bubble, and keep things on the same line when they belong together. Do not insert blank lines purely for spacing — every line break becomes a new bubble, so use them intentionally. Exception: line breaks inside fenced code blocks (```) and Markdown tables are preserved as-is and will NOT create new bubbles, since those must stay intact as a single block.")
+                    appendLine("回复按换行自动拆成多个短气泡：想拆就在那句末尾换行。代码块和Markdown表格内部保持原样不拆。不要为排版加空行。")
                 }
  
             }
