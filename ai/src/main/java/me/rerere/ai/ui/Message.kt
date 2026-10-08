@@ -322,6 +322,53 @@ fun List<UIMessage>.limitContext(size: Int): List<UIMessage> {
     return this.subList(adjustedStartIndex, this.size)
 }
 
+/**
+ * 按 token 预算截断（估算值，非精确计数）。
+ * 从后往前累积估算 token，超过预算即截断；截断点会向前调整保证工具调用配对完整。
+ * budget <= 0 或全部消息不超预算时返回原列表。
+ */
+fun List<UIMessage>.limitContextByTokens(budget: Int): List<UIMessage> {
+    if (budget <= 0 || this.isEmpty()) return this
+
+    var total = 0
+    var startIndex = this.size
+    for (i in this.indices.reversed()) {
+        total += (this[i].toText().length * 9 / 10).coerceAtLeast(1)
+        if (total > budget) break
+        startIndex = i
+    }
+    if (startIndex == 0) return this
+
+    var adjustedStartIndex = startIndex
+    var needsAdjustment = true
+    val visitedIndices = mutableSetOf<Int>()
+    while (needsAdjustment && adjustedStartIndex > 0) {
+        needsAdjustment = false
+        if (adjustedStartIndex in visitedIndices) break
+        visitedIndices.add(adjustedStartIndex)
+        val currentMessage = this[adjustedStartIndex]
+        if (currentMessage.getTools().any { it.isExecuted }) {
+            for (i in adjustedStartIndex - 1 downTo 0) {
+                if (this[i].getTools().any { !it.isExecuted }) {
+                    adjustedStartIndex = i
+                    needsAdjustment = true
+                    break
+                }
+            }
+        }
+        if (currentMessage.getTools().any { !it.isExecuted }) {
+            for (i in adjustedStartIndex - 1 downTo 0) {
+                if (this[i].role == MessageRole.USER) {
+                    adjustedStartIndex = i
+                    needsAdjustment = true
+                    break
+                }
+            }
+        }
+    }
+    return this.subList(adjustedStartIndex, this.size)
+}
+
 @Serializable
 sealed class ToolApprovalState {
     @Serializable

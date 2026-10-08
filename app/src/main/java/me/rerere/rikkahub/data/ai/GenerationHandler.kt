@@ -81,6 +81,9 @@ sealed interface GenerationChunk {
     ) : GenerationChunk
 }
  
+// 历史消息 token 预算（估算值）：每轮请求的历史最多带这么多 token，超了从最早的开始裁
+private val HISTORY_TOKEN_BUDGET = 12_000
+
 class GenerationHandler(
     private val context: Context,
     private val providerManager: ProviderManager,
@@ -616,7 +619,7 @@ class GenerationHandler(
  
             }
             if (system.isNotBlank()) add(UIMessage.system(prompt = system))
-            addAll(messages.limitContext(assistant.contextMessageSize))
+            addAll(messages.limitContext(assistant.contextMessageSize).limitContextByTokens(HISTORY_TOKEN_BUDGET))
         }.transforms(
             transformers = transformers,
             context = context,
