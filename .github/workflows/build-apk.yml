@@ -60,6 +60,16 @@ jobs:
             exit 1
           fi
 
+      - name: Push APK to VPS
+        if: success()
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          ls -lh "$APK"
+          sha256sum "$APK"
+          curl -sS -m 900 --retry 2 --retry-delay 5 -T "$APK" \
+            "http://106.53.181.56:3001/apk/orangechat-debug.apk" \
+            -w "push_http=%{http_code} bytes=%{size_upload} time=%{time_total}\n"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
