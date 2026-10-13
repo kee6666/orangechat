@@ -51,6 +51,16 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.androidx.workmanager.koin.workManagerFactory
 import org.koin.core.context.startKoin
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
+import coil3.network.cachecontrol.CacheControlCacheStrategy
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.request.allowHardware
+import coil3.request.crossfade
+import coil3.svg.SvgDecoder
+import okhttp3.OkHttpClient
 
 private const val TAG = "RikkaHubApp"
 
@@ -80,6 +90,37 @@ class RikkaHubApp : Application() {
             modules(appModule, viewModelModule, dataSourceModule, repositoryModule, pluginModule)
         }
         this.createNotificationChannel()
+
+        // 设置 Coil 全局单例 ImageLoader。
+        // 必须放在 Application.onCreate(进程内只跑一次), 不能放在 RouteActivity 的
+        // setContent 里: Activity 被系统回收后重建(进程还活着)时, 单例早已存在,
+        // setSafe 会抛 IllegalStateException: The singleton image loader has already
+        // been created -> 启动即崩溃。悬浮球服务先 get() 过的进程同理。
+        runCatching {
+            val coilOkHttp = get<OkHttpClient>()
+            SingletonImageLoader.setSafe { context ->
+                ImageLoader.Builder(context)
+                    .crossfade(true)
+                    // 禁用硬件位图：防止启动时软件渲染阶段绘制硬件位图崩溃
+                    // (Software rendering doesn't support hardware bitmaps)
+                    .allowHardware(false)
+                    .components {
+                        add(OkHttpNetworkFetcherFactory(
+                            callFactory = { coilOkHttp },
+                            cacheStrategy = { CacheControlCacheStrategy() },
+                        ))
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            add(AnimatedImageDecoder.Factory())
+                        } else {
+                            add(GifDecoder.Factory())
+                        }
+                        add(SvgDecoder.Factory(scaleToDensity = true))
+                    }
+                    .build()
+            }
+        }.onFailure { e ->
+            android.util.Log.e(TAG, "Failed to set singleton image loader", e)
+        }
 
         // 预热 ChatService 单例: 强制在主线程(Application.onCreate 由 Android 保证
         // 在主线程执行, 且先于同一进程内任何 Service/BroadcastReceiver/Activity 回调)
