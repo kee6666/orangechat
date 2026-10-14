@@ -135,7 +135,7 @@ class ChatCompletionsAPI(
             val id = lastChunk["id"]?.jsonPrimitive?.contentOrNull ?: ""
             val model = lastChunk["model"]?.jsonPrimitive?.contentOrNull ?: ""
             val finishReason = lastChunk["choices"]
-                ?.jsonArray?.get(0)?.jsonObject
+                ?.jsonArray?.getOrNull(0)?.jsonObject
                 ?.get("finish_reason")?.jsonPrimitive?.contentOrNull ?: "unknown"
             val usage = parseTokenUsage(lastChunk["usage"] as? JsonObject)
 
@@ -143,9 +143,9 @@ class ChatCompletionsAPI(
             val mergedContent = buildString {
                 for (chunk in sseChunks) {
                     val delta = chunk["choices"]
-                        ?.jsonArray?.get(0)?.jsonObject
+                        ?.jsonArray?.getOrNull(0)?.jsonObject
                         ?.get("delta")?.jsonObject
-                        ?: chunk["choices"]?.jsonArray?.get(0)?.jsonObject
+                        ?: chunk["choices"]?.jsonArray?.getOrNull(0)?.jsonObject
                             ?.get("message")?.jsonObject
                         ?: continue
                     delta["content"]?.jsonPrimitive?.contentOrNull?.let { append(it) }
@@ -154,9 +154,9 @@ class ChatCompletionsAPI(
 
             // 尝试从最后一个 chunk 的 delta 或 message 获取 tool_calls 等其他字段
             val lastDelta = lastChunk["choices"]
-                ?.jsonArray?.get(0)?.jsonObject
+                ?.jsonArray?.getOrNull(0)?.jsonObject
                 ?.get("delta")?.jsonObject
-                ?: lastChunk["choices"]?.jsonArray?.get(0)?.jsonObject
+                ?: lastChunk["choices"]?.jsonArray?.getOrNull(0)?.jsonObject
                     ?.get("message")?.jsonObject
                 ?: buildJsonObject { put("content", mergedContent) }
 
@@ -194,7 +194,8 @@ class ChatCompletionsAPI(
 
             val id = bodyJson["id"]?.jsonPrimitive?.contentOrNull ?: ""
             val model = bodyJson["model"]?.jsonPrimitive?.contentOrNull ?: ""
-            val choice = bodyJson["choices"]?.jsonArray?.get(0)?.jsonObject ?: error("choices is null")
+            val choice = bodyJson["choices"]?.jsonArray?.getOrNull(0)?.jsonObject
+                ?: error("empty choices in response: ${bodyStr.take(300)}")
 
             val message = choice["message"]?.jsonObject ?: throw Exception("message is null")
             val finishReason = choice["finish_reason"]
