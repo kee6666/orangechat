@@ -5,6 +5,9 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: build-apk
   cancel-in-progress: true
@@ -64,25 +67,17 @@ jobs:
             exit 1
           fi
 
-      - name: Push APK to VPS
+      - name: Publish APK to GitHub Release
         if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
           ls -lh "$APK"
           sha256sum "$APK"
-          ok=0
-          for attempt in 1 2 3; do
-            echo "--- push attempt $attempt ---"
-            if curl -sS -f --http1.1 -m 1800 --retry 2 --retry-delay 10 --retry-all-errors -T "$APK" \
-              "http://106.53.181.56:3001/apk/orangechat-debug.apk" \
-              -w "push_http=%{http_code} bytes=%{size_upload} time=%{time_total}\n"; then
-              ok=1
-              break
-            fi
-            echo "attempt $attempt failed"
-            sleep 15
-          done
-          if [ "$ok" != "1" ]; then echo "all push attempts failed"; exit 1; fi
+          TAG="build-$(date +%Y%m%d-%H%M%S)"
+          gh release create "$TAG" "$APK" --title "$TAG" --notes "auto build ${GITHUB_SHA}"
+          echo "published release: $TAG"
 
       - name: Upload APK
         if: always()
