@@ -197,6 +197,9 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
         val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
 
         val candidates = bodyJson["candidates"]!!.jsonArray
+        if (candidates.isEmpty()) {
+            throw Exception("GoogleProvider: empty candidates in response: $bodyStr")
+        }
         val usage = bodyJson["usageMetadata"]!!.jsonObject
 
         val messageChunk = MessageChunk(

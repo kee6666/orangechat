@@ -692,7 +692,7 @@ class ChatService(
                     ),
                 )
 
-                val replyText = result.choices[0].message?.toText()?.trim().orEmpty()
+                val replyText = result.choices.firstOrNull()?.message?.toText()?.trim().orEmpty()
                 if (replyText.isBlank()) {
                     Log.w(TAG, "notifyVoiceCallDeclined: empty reply, conversationId=$conversationId")
                     return@launch
@@ -1312,9 +1312,14 @@ addAll(localTools.getTools(assistant.localTools, me.rerere.rikkahub.data.ai.tool
             session.saveMutex.withLock {
                 // 生成完，conversation可能不是最新了，因此需要重新获取
                 conversationRepo.getConversationById(conversation.id)?.let {
+                    val generatedTitle =
+                        result.choices.firstOrNull()?.message?.toText()?.trim().orEmpty()
+                    if (generatedTitle.isBlank()) {
+                        error("title model returned empty choices")
+                    }
                     saveConversation(
                         conversationId,
-                        it.copy(title = result.choices[0].message?.toText()?.trim() ?: "")
+                        it.copy(title = generatedTitle)
                     )
                 }
             }
@@ -1363,7 +1368,7 @@ addAll(localTools.getTools(assistant.localTools, me.rerere.rikkahub.data.ai.tool
                 ),
             )
             val suggestions =
-                result.choices[0].message?.toText()?.split("\n")?.map { it.trim() }
+                result.choices.firstOrNull()?.message?.toText()?.split("\n")?.map { it.trim() }
                     ?.filter { it.isNotBlank() } ?: emptyList()
 
             session.saveMutex.withLock {
@@ -1445,7 +1450,7 @@ addAll(localTools.getTools(assistant.localTools, me.rerere.rikkahub.data.ai.tool
                 ),
             )
 
-            return result.choices[0].message?.toText()?.trim()
+            return result.choices.firstOrNull()?.message?.toText()?.trim()
                 ?: throw IllegalStateException("Failed to generate compressed summary")
         }
 
