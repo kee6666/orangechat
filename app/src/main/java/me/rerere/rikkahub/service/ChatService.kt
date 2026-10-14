@@ -1288,39 +1288,65 @@ addAll(localTools.getTools(assistant.localTools, me.rerere.rikkahub.data.ai.tool
 
         runCatching {
             val settings = settingsStore.settingsFlow.first()
-            val model = settings.findModelById(settings.titleModelId) ?: return
-            val provider = model.findProvider(settings.providers) ?: return
-
-            val providerHandler = providerManager.getProviderByType(provider)
-            val result = providerHandler.generateText(
-                providerSetting = provider,
-                messages = listOf(
-                    UIMessage.user(
-                        prompt = settings.titlePrompt.applyPlaceholders(
-                            "locale" to Locale.getDefault().displayName,
-                            "content" to conversation.currentMessages
-                                .takeLast(4).joinToString("\n\n") { it.summaryAsText() })
-                    ),
-                ),
-                params = TextGenerationParams(
-                    model = model,
-                    reasoningLevel = ReasoningLevel.OFF,
-                ),
+            val prompt = settings.titlePrompt.applyPlaceholders(
+                "locale" to Locale.getDefault().displayName,
+                "content" to conversation.currentMessages
+                    .takeLast(4).joinToString("\n\n") { it.summaryAsText() }
             )
+            // 标题模型没配、或者它吐了空内容，就退回当前聊天模型。
+            // 标题是装饰性的东西，不该为了它给用户弹红卡片。
+            val candidates = listOfNotNull(
+                settings.findModelById(settings.titleModelId),
+                settings.findModelById(settings.chatModelId),
+            ).distinctBy { it.id }
 
-            val session = getOrCreateSession(conversationId)
-            session.saveMutex.withLock {
-                // 生成完，conversation可能不是最新了，因此需要重新获取
-                conversationRepo.getConversationById(conversation.id)?.let {
-                    val generatedTitle =
-                        result.choices.firstOrNull()?.message?.toText()?.trim().orEmpty()
-                    if (generatedTitle.isBlank()) {
-                        error("title model returned empty choices")
-                    }
-                    saveConversation(
-                        conversationId,
-                        it.copy(title = generatedTitle)
+            var generatedTitle = ""
+            var lastReason = "没有可用的标题模型"
+            for (model in candidates) {
+                val provider = model.findProvider(settings.providers)
+                if (provider == null) {
+                    lastReason = "模型 ${model.displayName} 找不到所属服务商"
+                    continue
+                }
+                val result = try {
+                    providerManager.getProviderByType(provider).generateText(
+                        providerSetting = provider,
+                        messages = listOf(UIMessage.user(prompt = prompt)),
+                        params = TextGenerationParams(
+                            model = model,
+                            reasoningLevel = ReasoningLevel.OFF,
+                        ),
                     )
+                } catch (e: Exception) {
+                    lastReason =
+                        "标题模型 ${model.displayName}(${provider.name}/${model.modelId}) 调用失败: ${e.message}"
+                    Log.e(TAG, "generateTitle: $lastReason", e)
+                    continue
+                }
+                val rawTitle =
+                    result.choices.firstOrNull()?.message?.toText()?.trim().orEmpty()
+                if (rawTitle.isBlank()) {
+                    lastReason =
+                        "标题模型 ${model.displayName}(${provider.name}/${model.modelId}) 返回空内容, choices=${result.choices.size}"
+                    Log.e(TAG, "generateTitle: $lastReason")
+                    continue
+                }
+                generatedTitle = rawTitle
+                break
+            }
+
+            if (generatedTitle.isBlank()) {
+                Log.e(TAG, "generateTitle gave up: $lastReason")
+            } else {
+                val session = getOrCreateSession(conversationId)
+                session.saveMutex.withLock {
+                    // 生成完，conversation可能不是最新了，因此需要重新获取
+                    conversationRepo.getConversationById(conversation.id)?.let {
+                        saveConversation(
+                            conversationId,
+                            it.copy(title = generatedTitle)
+                        )
+                    }
                 }
             }
         }.onFailure {
