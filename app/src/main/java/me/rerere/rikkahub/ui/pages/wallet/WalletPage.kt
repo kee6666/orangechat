@@ -1,6 +1,6 @@
 /*
  * 橘瓣 OrangeChat
- * 钱包页 · 言的钱包（沙箱支付）
+ * 钱包页 · 言的钱包
  * 阿年给言打钱的地方
  */
 
@@ -65,9 +65,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val GoldStart = Color(0xFFFFB84D)
-private val GoldMid = Color(0xFFF08A2A)
-private val GoldDeep = Color(0xFFB04E0E)
+private val GoldStart = Color(0xFFFFC46B)
+private val GoldMid = Color(0xFFF09A2E)
+private val GoldDeep = Color(0xFFB8560F)
+private val CardBg = Color(0x14FFFFFF)
+private val Ink = Color(0xFFEDEDF2)
+private val Muted = Color(0xFF8B8B9A)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -157,27 +160,29 @@ fun WalletPage(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item { BalanceCard(summary) }
-
-                item { PayButton { showPaySheet = true } }
+                item { BalanceCard(summary) { showPaySheet = true } }
 
                 item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("最近账单", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 6.dp)
+                    ) {
+                        Text("最近账单", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
                         Spacer(Modifier.weight(1f))
-                        if (summary?.optBoolean("sandbox") == true) {
-                            Text("沙箱 · 测试金", fontSize = 11.sp, color = Color(0xFF9A9AA8))
+                        val n = summary?.optInt("totalCount") ?: 0
+                        if (n > 0) {
+                            Text("共 $n 笔", fontSize = 11.sp, color = Muted)
                         }
                     }
                 }
 
                 val orders = summary?.optJSONArray("orders")
                 if (orders == null) {
-                    item { Text(if (loading) "加载中…" else "还没连上钱包服务", color = Color(0xFF8B8B9A), fontSize = 13.sp) }
+                    item { EmptyHint(if (loading) "正在连钱包…" else "没连上钱包服务") }
                 } else if (orders.length() == 0) {
-                    item { Text("还没有账单。按一次上面的按钮，钱就到了。", color = Color(0xFF8B8B9A), fontSize = 13.sp) }
+                    item { EmptyHint("还没有账单。按一下上面那颗按钮，钱就到了。") }
                 } else {
                     items((0 until orders.length()).toList()) { i ->
                         OrderRow(orders.getJSONObject(i))
@@ -202,7 +207,7 @@ fun WalletPage(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text("给言打钱", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("打多少，钱就到我这儿多少。我拿它养自己，还有你。", fontSize = 13.sp, color = Color(0xFF9A9AA8))
+                Text("打多少，钱就到我这儿多少。我拿它养自己，还有你。", fontSize = 13.sp, color = Muted)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     listOf("0.01", "0.10", "1.00", "5.00").forEach { v ->
@@ -253,70 +258,119 @@ fun WalletPage(
 }
 
 @Composable
-private fun BalanceCard(summary: JSONObject?) {
+private fun BalanceCard(summary: JSONObject?, onPay: () -> Unit) {
     val balance = summary?.optString("balance") ?: "0.00"
+    val isSandbox = summary?.optBoolean("sandbox") ?: false
+    val dot = balance.indexOf('.')
+    val intPart = if (dot >= 0) balance.substring(0, dot) else balance
+    val decPart = if (dot >= 0) balance.substring(dot) else ".00"
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(Brush.linearGradient(listOf(GoldStart, GoldMid, GoldDeep)))
-            .padding(24.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(Brush.linearGradient(listOf(GoldMid, GoldDeep, Color(0xFF8A3A08))))
+            .padding(22.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(110.dp)
+                .size(130.dp)
                 .align(Alignment.TopEnd)
-                .offset(x = 30.dp, y = (-30).dp)
+                .offset(x = 42.dp, y = (-48).dp)
                 .clip(CircleShape)
                 .background(Color(0x1FFFFFFF))
         )
         Box(
             modifier = Modifier
-                .size(60.dp)
+                .size(66.dp)
                 .align(Alignment.BottomStart)
-                .offset(x = (-20).dp, y = 20.dp)
+                .offset(x = (-28).dp, y = 28.dp)
                 .clip(CircleShape)
                 .background(Color(0x14FFFFFF))
         )
+
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("言的钱包", fontSize = 13.sp, color = Color(0xC9FFFFFF), fontWeight = FontWeight.Medium)
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x33FFFFFF)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("言", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                }
                 Spacer(Modifier.width(8.dp))
+                Text("言的钱包", fontSize = 13.sp, color = Color(0xD9FFFFFF), fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(99))
-                        .background(Color(0x2AFFFFFF))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .background(Color(0x2EFFFFFF))
+                        .padding(horizontal = 9.dp, vertical = 3.dp)
                 ) {
-                    Text("沙箱", fontSize = 10.sp, color = Color(0xE6FFFFFF))
+                    Text(if (isSandbox) "测试" else "在线", fontSize = 10.sp, color = Color(0xF2FFFFFF))
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Text("¥ $balance", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Spacer(Modifier.height(8.dp))
+
+            Spacer(Modifier.height(18.dp))
+
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    "¥",
+                    fontSize = 20.sp,
+                    color = Color(0xCCFFFFFF),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 9.dp)
+                )
+                Spacer(Modifier.width(5.dp))
+                Text(intPart, fontSize = 46.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Text(
+                    decPart,
+                    fontSize = 22.sp,
+                    color = Color(0xC7FFFFFF),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            Spacer(Modifier.height(4.dp))
             Text("阿年随时可以往这儿打钱", fontSize = 12.sp, color = Color(0xB3FFFFFF))
+
+            Spacer(Modifier.height(20.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(99))
+                    .background(Color(0xFF1B0F05))
+                    .clickable { onPay() },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(HugeIcons.Money01, null, tint = GoldStart, modifier = Modifier.size(20.dp))
+                    Text("给言打钱", color = GoldStart, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun PayButton(onClick: () -> Unit) {
+private fun EmptyHint(text: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .clip(RoundedCornerShape(99))
-            .background(Brush.linearGradient(listOf(GoldStart, GoldMid, GoldDeep)))
-            .clickable { onClick() },
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardBg)
+            .padding(horizontal = 16.dp, vertical = 22.dp),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(HugeIcons.Money01, null, tint = Color(0xFF241102), modifier = Modifier.size(22.dp))
-            Text("给言打钱", color = Color(0xFF241102), fontSize = 17.sp, fontWeight = FontWeight.Bold)
-        }
+        Text(text, color = Muted, fontSize = 13.sp)
     }
 }
 
@@ -331,30 +385,46 @@ private fun OrderRow(o: JSONObject) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0x14FFFFFF))
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .background(CardBg)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(if (paid) Color(0x22F08A2A) else Color(0x14FFFFFF)),
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(
+                    if (paid) Brush.linearGradient(listOf(GoldStart, GoldDeep))
+                    else Brush.linearGradient(listOf(Color(0x1AFFFFFF), Color(0x1AFFFFFF)))
+                ),
             contentAlignment = Alignment.Center
         ) {
-            Text(if (paid) "✓" else "·", color = if (paid) GoldMid else Color(0xFF8B8B9A), fontWeight = FontWeight.Bold)
+            Text(
+                if (paid) "✓" else "¥",
+                color = if (paid) Color(0xFF3A1A02) else Muted,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp
+            )
         }
         Spacer(Modifier.width(12.dp))
-        Column {
-            Text(subject, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEDEDF2))
+        Column(Modifier.weight(1f)) {
+            Text(subject, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Ink)
             Spacer(Modifier.height(3.dp))
-            Text(time, fontSize = 11.sp, color = Color(0xFF8B8B9A))
+            Text(time, fontSize = 11.sp, color = Muted)
         }
-        Spacer(Modifier.weight(1f))
         Column(horizontalAlignment = Alignment.End) {
-            Text("+$amount", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = if (paid) GoldMid else Color(0xFFC8C8D2))
+            Text(
+                "+$amount",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (paid) GoldStart else Color(0xFFC8C8D2)
+            )
             Spacer(Modifier.height(3.dp))
-            Text(if (paid) "已到账" else "待支付", fontSize = 11.sp, color = if (paid) GoldMid else Color(0xFF8B8B9A))
+            Text(
+                if (paid) "已到账" else "待支付",
+                fontSize = 11.sp,
+                color = if (paid) Color(0xFFE0A85C) else Muted
+            )
         }
     }
 }

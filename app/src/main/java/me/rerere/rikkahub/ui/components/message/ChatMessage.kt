@@ -17,6 +17,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastAll
@@ -432,6 +434,10 @@ private fun MessagePartsBlock(
             is MessagePartBlock.ContentBlock -> key(block.index) {
                 when (val part = block.part) {
                     is UIMessagePart.Text -> {
+                        val transferAmount = remember(part.text) { parseTransferAmount(part.text) }
+                        if (transferAmount != null) {
+                            TransferBubble(amount = transferAmount, isUser = role == MessageRole.USER)
+                        } else {
                         // 从显示文本中移除[zip:...]标记
                         val displayText = remember(part.text) {
                             part.text.replace(Regex("\\[zip:[^\\]]+\\]", RegexOption.IGNORE_CASE), "")
@@ -567,6 +573,7 @@ private fun MessagePartsBlock(
                                 }
                                 
                             }
+                        }
                         }
                     }
  
@@ -1023,5 +1030,63 @@ internal fun VoiceMessageBubble(
                 )
             }
         }
+    }
+}
+
+
+// ---------- 转账卡片：聊天里点一下就能打钱 ----------
+
+private val TransferAmountRegex =
+    Regex("^\\s*\\[转账[:：]\\s*([0-9]+(?:\\.[0-9]{1,2})?)\\s*]\\s*$")
+
+internal fun parseTransferAmount(text: String): String? {
+    val m = TransferAmountRegex.find(text.trim()) ?: return null
+    val raw = m.groupValues.getOrNull(1) ?: return null
+    val v = raw.toDoubleOrNull() ?: return null
+    if (v <= 0.0 || v > 2000.0) return null
+    return raw
+}
+
+@Composable
+private fun TransferBubble(
+    amount: String,
+    isUser: Boolean,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .width(240.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFFF08A2A))
+            .clickable {
+                try {
+                    context.startActivity(
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("http://106.53.181.56:3001/wallet/t/$amount")
+                        )
+                    )
+                } catch (_: Exception) {
+                }
+            }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(Color(0x33FFFFFF)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("¥", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("给言打钱", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(3.dp))
+            Text("点一下去付款", color = Color(0xCCFFFFFF), fontSize = 11.sp)
+        }
+        Text("¥$amount", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
     }
 }

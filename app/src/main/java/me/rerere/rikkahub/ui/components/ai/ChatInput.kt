@@ -161,6 +161,7 @@ fun ChatInput(
     onLongSendClick: () -> Unit,
     onVoiceMessage: ((url: String, duration: Long, transcript: String) -> Unit)? = null,
     autoStartVoice: Boolean = false,
+    onOpenWallet: () -> Unit = {},
 ) {
     val toaster = LocalToaster.current
     val assistant = settings.getCurrentAssistant()
@@ -813,6 +814,7 @@ fun ChatInput(
                             onPickVideo = { videoPickerLauncher.launch("video/*") },
                             onPickAudio = { audioPickerLauncher.launch("audio/*") },
                             onPickFile = { filePickerLauncher.launch(arrayOf("*/*")) },
+                            onOpenWallet = onOpenWallet,
                         )
                     }
                 }

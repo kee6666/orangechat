@@ -222,6 +222,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
                     currentChatModel = currentChatModel,
                     bigScreen = true,
                     autoStartVoice = autoStartVoice,
+                    onOpenWallet = onOpenWallet,
                     errors = errors,
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearAllErrors() },
@@ -692,14 +693,6 @@ private fun TopBar(
                         onClick = {
                             folderExpanded = false
                             onOpenBrowser()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("钱包") },
-                        leadingIcon = { Icon(HugeIcons.Wallet01, contentDescription = null) },
-                        onClick = {
-                            folderExpanded = false
-                            onOpenWallet()
                         }
                     )
                     DropdownMenuItem(

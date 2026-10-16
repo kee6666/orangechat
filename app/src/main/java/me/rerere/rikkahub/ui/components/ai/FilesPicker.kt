@@ -54,6 +54,7 @@ import me.rerere.hugeicons.stroke.MusicNote03
 import me.rerere.hugeicons.stroke.Package
 import me.rerere.hugeicons.stroke.Package01
 import me.rerere.hugeicons.stroke.Video01
+import me.rerere.hugeicons.stroke.Wallet01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.mcp.McpManager
@@ -90,6 +91,7 @@ internal fun FilesPicker(
     onPickVideo: () -> Unit,
     onPickAudio: () -> Unit,
     onPickFile: () -> Unit,
+    onOpenWallet: () -> Unit = {},
 ) {
     // settings 仍保留给 InjectionQuickConfigSheet -> ExtensionSelector 使用（它需要完整 Settings）
     val settings = LocalSettings.current
@@ -119,6 +121,8 @@ internal fun FilesPicker(
             }
 
             FilePickButton(onClick = onPickFile)
+
+            WalletButton(onClick = onOpenWallet)
         }
 
         HorizontalDivider(
@@ -321,6 +325,17 @@ fun FilePickButton(onClick: () -> Unit = {}) {
         Icon(HugeIcons.Files02, null)
     }, text = {
         Text(stringResource(R.string.upload_file))
+    }) {
+        onClick()
+    }
+}
+
+@Composable
+fun WalletButton(onClick: () -> Unit = {}) {
+    BigIconTextButton(icon = {
+        Icon(HugeIcons.Wallet01, null)
+    }, text = {
+        Text("钱包")
     }) {
         onClick()
     }
