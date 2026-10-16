@@ -210,8 +210,11 @@ fun WalletPage(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(99))
-                                .background(if (selected) Brush.linearGradient(listOf(GoldMid, GoldDeep)) else Color(0x1AFFFFFF))
-                                .clickable { amount = v }
+                                .background(
+                                    if (selected) Brush.linearGradient(listOf(GoldMid, GoldDeep))
+                                    else Brush.linearGradient(listOf(Color(0x1AFFFFFF), Color(0x1AFFFFFF)))
+                                )
+                                .clickable { onAmount(v) }
                                 .padding(horizontal = 18.dp, vertical = 9.dp)
                         ) {
                             Text(v, color = if (selected) Color.White else Color(0xFFD8D8E2), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

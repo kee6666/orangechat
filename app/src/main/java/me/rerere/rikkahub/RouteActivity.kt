@@ -528,9 +528,9 @@ class RouteActivity : ComponentActivity() {
                             entry<Screen.Wallet> {
                                 WalletPage(
                                     onOpenPay = { url ->
-                                        navController.navigate(Screen.WebView(url = url))
+                                        nav.navigate(Screen.WebView(url = url))
                                     },
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { nav.popBackStack() }
                                 )
                             }
 
