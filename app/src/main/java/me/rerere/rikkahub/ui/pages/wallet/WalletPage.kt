@@ -214,7 +214,7 @@ fun WalletPage(
                                     if (selected) Brush.linearGradient(listOf(GoldMid, GoldDeep))
                                     else Brush.linearGradient(listOf(Color(0x1AFFFFFF), Color(0x1AFFFFFF)))
                                 )
-                                .clickable { onAmount(v) }
+                                .clickable { amount = v }
                                 .padding(horizontal = 18.dp, vertical = 9.dp)
                         ) {
                             Text(v, color = if (selected) Color.White else Color(0xFFD8D8E2), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

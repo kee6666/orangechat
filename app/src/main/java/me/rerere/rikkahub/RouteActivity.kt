@@ -526,6 +526,7 @@ class RouteActivity : ComponentActivity() {
                             }
 
                             entry<Screen.Wallet> {
+                                val nav = LocalNavController.current
                                 WalletPage(
                                     onOpenPay = { url ->
                                         nav.navigate(Screen.WebView(url = url))
