@@ -222,7 +222,6 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
                     currentChatModel = currentChatModel,
                     bigScreen = true,
                     autoStartVoice = autoStartVoice,
-                    onOpenWallet = onOpenWallet,
                     errors = errors,
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearAllErrors() },
@@ -378,6 +377,7 @@ private fun ChatPageContent(
                     mcpManager = vm.mcpManager,
                     hazeState = hazeState,
                     autoStartVoice = autoStartVoice,
+                    onOpenWallet = onOpenWallet,
                     onCancelClick = {
                         vm.stopGeneration()
                     },
