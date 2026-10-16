@@ -182,6 +182,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
     }
 
     val chatListState = rememberLazyListState()
+    val onOpenWallet = { navController.navigate(Screen.Wallet) }
     LaunchedEffect(nodeId, conversation.messageNodes.size) {
         if (!vm.chatListInitialized && conversation.messageNodes.isNotEmpty()) {
             if (nodeId != null) {
@@ -222,6 +223,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
                     currentChatModel = currentChatModel,
                     bigScreen = true,
                     autoStartVoice = autoStartVoice,
+                    onOpenWallet = onOpenWallet,
                     errors = errors,
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearAllErrors() },
@@ -282,6 +284,7 @@ private fun ChatPageContent(
     enableWebSearch: Boolean,
     currentChatModel: Model?,
     autoStartVoice: Boolean = false,
+    onOpenWallet: () -> Unit = {},
     errors: List<ChatError>,
     onDismissError: (Uuid) -> Unit,
     onClearAllErrors: () -> Unit,
@@ -317,9 +320,7 @@ private fun ChatPageContent(
                     onOpenBrowser = {
                         navController.navigate(Screen.WebView(url = "https://www.bing.com/"))
                     },
-                    onOpenWallet = {
-                        navController.navigate(Screen.Wallet)
-                    },
+                    onOpenWallet = onOpenWallet,
                     settings = setting,
                     conversation = conversation,
                     bigScreen = bigScreen,
