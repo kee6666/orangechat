@@ -257,6 +257,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
                     currentChatModel = currentChatModel,
                     bigScreen = false,
                     autoStartVoice = autoStartVoice,
+                    onOpenWallet = onOpenWallet,
                     errors = errors,
                     onDismissError = { vm.dismissError(it) },
                     onClearAllErrors = { vm.clearAllErrors() },
