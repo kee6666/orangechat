@@ -120,6 +120,7 @@ import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceTerminalPage
 import me.rerere.rikkahub.ui.pages.favorite.FavoritePage
 import me.rerere.rikkahub.ui.pages.health.HealthPage
 import me.rerere.rikkahub.ui.pages.history.HistoryPage
+import me.rerere.rikkahub.ui.pages.wallet.WalletPage
 import me.rerere.rikkahub.ui.pages.imggen.ImageGenPage
 import me.rerere.rikkahub.ui.pages.log.LogPage
 import me.rerere.rikkahub.ui.pages.security.SecurityAuditPage
@@ -522,6 +523,15 @@ class RouteActivity : ComponentActivity() {
 
                             entry<Screen.WebView> { key ->
                                 WebViewPage(key.url, key.content)
+                            }
+
+                            entry<Screen.Wallet> {
+                                WalletPage(
+                                    onOpenPay = { url ->
+                                        navController.navigate(Screen.WebView(url = url))
+                                    },
+                                    onBack = { navController.popBackStack() }
+                                )
                             }
 
                             entry<Screen.SettingDisplay> {
@@ -948,6 +958,9 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data class WebView(val url: String = "", val content: String = "") : Screen
+
+    @Serializable
+    data object Wallet : Screen
 
     @Serializable
     data object SettingDisplay : Screen

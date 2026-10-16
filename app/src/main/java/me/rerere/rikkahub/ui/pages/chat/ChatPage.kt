@@ -81,6 +81,7 @@ import androidx.compose.ui.platform.LocalContext
 import me.rerere.hugeicons.stroke.Ear
 import me.rerere.hugeicons.stroke.Earth
 import me.rerere.hugeicons.stroke.Folder01
+import me.rerere.hugeicons.stroke.Wallet01
 import me.rerere.rikkahub.EarConsentActivity
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.hugeicons.stroke.Voice
@@ -315,6 +316,9 @@ private fun ChatPageContent(
                     },
                     onOpenBrowser = {
                         navController.navigate(Screen.WebView(url = "https://www.bing.com/"))
+                    },
+                    onOpenWallet = {
+                        navController.navigate(Screen.Wallet)
                     },
                     settings = setting,
                     conversation = conversation,
@@ -583,6 +587,7 @@ private fun TopBar(
     onOpenHeart: () -> Unit,
     onOpenEar: () -> Unit,
     onOpenBrowser: () -> Unit,
+    onOpenWallet: () -> Unit,
     onVideoCall: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -687,6 +692,14 @@ private fun TopBar(
                         onClick = {
                             folderExpanded = false
                             onOpenBrowser()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("钱包") },
+                        leadingIcon = { Icon(HugeIcons.Wallet01, contentDescription = null) },
+                        onClick = {
+                            folderExpanded = false
+                            onOpenWallet()
                         }
                     )
                     DropdownMenuItem(
