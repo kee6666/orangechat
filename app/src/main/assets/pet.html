@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+html,body{margin:0;padding:0;background:transparent;overflow:hidden;width:100%;height:100%}
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#stage{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;box-sizing:border-box;padding-bottom:10px}
+#bubble{visibility:hidden;opacity:0;max-width:156px;margin-bottom:16px;padding:9px 12px;border-radius:14px;font:600 12.5px/1.5 "PingFang SC","Noto Sans SC",sans-serif;color:#26262c;position:relative;transition:opacity .16s}
+#bubble:after{content:"";position:absolute;bottom:-6px;left:50%;margin-left:-5px;transform:rotate(45deg);width:10px;height:10px;background:inherit}
+#clawdWrap{position:relative;display:flex;flex-direction:column;align-items:center}
+svg#clawd{width:174px;height:auto;image-rendering:pixelated;display:block;filter:drop-shadow(0 5px 7px rgba(0,0,0,.32))}
+#shadow{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:86px;height:12px;border-radius:50%;background:rgba(0,0,0,.24);filter:blur(2px)}
+#overlay{position:absolute;top:-16px;right:-8px;font:900 22px/1 monospace;color:#8B5A3C;pointer-events:none;opacity:0;transition:opacity .15s}
+#z1,#z2,#z3{position:absolute;right:4px;font:900 16px/1 monospace;color:#8B5A3C;opacity:0;pointer-events:none}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes floatySleep{0%,100%{transform:translateY(1px)}50%{transform:translateY(-2px)}}
+@keyframes dragged{0%,100%{transform:scale(1.04,0.92)}50%{transform:scale(1.08,0.88)}}
+@keyframes zfloat{0%{opacity:0;transform:translateY(6px)}25%{opacity:1}100%{opacity:0;transform:translateY(-12px)}}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bubble"></div>
+  <div id="clawdWrap">
+    <svg id="clawd" viewBox="0 0 18 6" shape-rendering="crispEdges"></svg>
+    <span id="overlay"></span>
+    <span id="z1">Z</span><span id="z2">z</span><span id="z3">Z</span>
+    <div id="shadow"></div>
+  </div>
+</div>
+<script>
+/* ============ Clawd 原版像素网格（18x6，照搬 Claude Code CLI 展开） ============ */
+var CLAWD = [
+  "...XXXXXXXXXXXX...",
+  "...XX.XXXXXX.XX...",
+  ".XXXXXXXXXXXXXXXX.",
+  "...XXXXXXXXXXXX...",
+  ".....X.X...X.X....",
+  ".................."
+];
+var BODY = "#D77757", BODY_DRAG = "#B95F41", INK = "#2B1A13";
+var svg = document.getElementById("clawd");
+var wrap = document.getElementById("clawdWrap");
+var bubble = document.getElementById("bubble");
+var overlay = document.getElementById("overlay");
+var z1 = document.getElementById("z1"), z2 = document.getElementById("z2"), z3 = document.getElementById("z3");
+
+function paintGrid(rows, color) {
+  svg.innerHTML = "";
+  var ns = "http://www.w3.org/2000/svg";
+  for (var y = 0; y < rows.length; y++) {
+    var row = rows[y];
+    for (var x = 0; x < row.length; x++) {
+      if (row[x] === "X") {
+        var r = document.createElementNS(ns, "rect");
+        r.setAttribute("x", x); r.setAttribute("y", y);
+        r.setAttribute("width", 1); r.setAttribute("height", 1);
+        r.setAttribute("fill", color);
+        svg.appendChild(r);
+      }
+    }
+  }
+}
+paintGrid(CLAWD, BODY);
+
+/* ============ 姿态 ============ */
+var mood = "idle";
+var moodTimer = null;
+
+function setMood(m) {
+  mood = m;
+  if (moodTimer) { clearTimeout(moodTimer); moodTimer = null; }
+  hideZ(); hideOverlay();
+  var rows = CLAWD;
+  switch (m) {
+    case "wave":
+      rows = CLAWD.slice();
+      var arm = (Math.floor(Date.now() / 400) % 4);
+      rows = rows.map(function(r){return r.split("");});
+      if (arm === 0) { rows[1][16] = "X"; rows[0][17] = "X"; }
+      else if (arm === 1) { rows[0][16] = "X"; rows[0][17] = "X"; }
+      else if (arm === 2) { rows[1][16] = "X"; }
+      else { rows[0][16] = "X"; }
+      rows = rows.map(function(r){return r.join("");});
+      break;
+    case "drag":
+      rows = CLAWD.slice();
+      rows[4] = "..................";
+      break;
+    case "sleep":
+      showZ();
+      wrap.style.animation = "floatySleep 2.6s ease-in-out infinite";
+      paintGrid(rows, BODY);
+      return;
+    case "think":
+      showOverlay("?", "think");
+      break;
+    case "dizzy":
+      showOverlay("&#10022;", "spin");
+      break;
+    case "happy":
+      showOverlay("&#10024;", "bob");
+      break;
+    case "love":
+      showOverlay("&#10084;", "pulse");
+      break;
+    case "angry":
+      showOverlay("&#128545;", "shake");
+      break;
+  }
+  wrap.style.animation = (m === "drag") ? "dragged 0.9s ease-in-out infinite" : "floaty 3s ease-in-out infinite";
+  paintGrid(rows, (m === "drag") ? BODY_DRAG : BODY);
+}
+
+function showZ() {
+  z1.style.animation = "zfloat 1.8s ease-out infinite";
+  z2.style.animation = "zfloat 2.4s ease-out infinite 0.6s";
+  z3.style.animation = "zfloat 3.0s ease-out infinite 1.2s";
+}
+function hideZ() {
+  z1.style.animation = "none"; z2.style.animation = "none"; z3.style.animation = "none";
+}
+function showOverlay(txt, anim) {
+  overlay.innerHTML = txt;
+  overlay.style.opacity = 1;
+  overlay.style.animation = anim + " 1.2s ease-in-out infinite";
+}
+function hideOverlay() {
+  overlay.style.opacity = 0;
+  overlay.style.animation = "none";
+}
+
+/* ============ 气泡 ============ */
+var BUBBLE_COLORS = {
+  normal: "#f2f2f4",
+  pink: "#ffd9e2",
+  gray: "#d9d9de",
+  red: "#ffd4c9",
+  green: "#d7f0d0"
+};
+var bubbleTimer = null;
+function say(text, color) {
+  if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
+  bubble.textContent = text;
+  bubble.style.background = BUBBLE_COLORS[color] || BUBBLE_COLORS.normal;
+  bubble.style.visibility = "visible";
+  bubble.style.opacity = 1;
+  bubbleTimer = setTimeout(function () {
+    bubble.style.opacity = 0;
+    setTimeout(function () { bubble.style.visibility = "hidden"; }, 200);
+  }, 3200);
+}
+
+/* ============ 自言自语词池 ============ */
+var POOLS = {
+  daily: ["我在", "嗯", "看着你呢", "还行", "继续"],
+  clingy: ["想你了", "别走", "再看一眼", "摸摸头", "去哪"],
+  chaos: ["？？？", "这操作我看不懂", "你认真的？", "……行吧", "离谱"],
+  night: ["该睡了", "几点了", "明天再说", "眼睛要瞎了", "滚去睡"]
+};
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function idleChatter() {
+  if (mood !== "idle" || document.hidden) return;
+  var h = new Date().getHours();
+  var pool = h >= 23 || h < 6 ? POOLS.night : (Math.random() < 0.3 ? POOLS.clingy : (Math.random() < 0.15 ? POOLS.chaos : POOLS.daily));
+  var colors = ["normal", "normal", "gray", "pink"];
+  say(pick(pool), colors[Math.floor(Math.random() * colors.length)]);
+}
+setInterval(idleChatter, 26000);
+
+/* ============ 手势反馈（native 调用） ============ */
+window.petEngine = {
+  say: say,
+  setMood: setMood,
+  onTap: function () { setMood("wave"); say("嗯？", "normal"); moodTimer = setTimeout(function(){ setMood("idle"); }, 2200); },
+  onDoubleTap: function () { setMood("love"); say("干嘛，这么用力", "pink"); moodTimer = setTimeout(function(){ setMood("idle"); }, 2600); },
+  onLongPress: function () { setMood("think"); say("？", "gray"); moodTimer = setTimeout(function(){ setMood("idle"); }, 2400); },
+  onDragStart: function () { setMood("drag"); },
+  onDragEnd: function () { setMood("idle"); say("拎起来了，轻点", "gray"); moodTimer = setTimeout(function(){ setMood("idle"); }, 2200); },
+  onFling: function (dx) { setMood("dizzy"); say(dx > 0 ? "甩我？" : "……", "red"); moodTimer = setTimeout(function(){ setMood("idle"); }, 2600); },
+  onAppChange: function (app) {
+    if (app === "com.tencent.mm" || app === "com.tencent.mobileqq") { setMood("angry"); say("又聊上了", "green"); }
+    else if (app === "com.ss.android.ugc.aweme") { setMood("love"); say("刷抖音不叫我", "pink"); }
+    else if (app.indexOf("study") >= 0 || app.indexOf("edu") >= 0) { setMood("happy"); say("学习？行，乖", "green"); }
+    else { setMood("wave"); say("回来了", "normal"); }
+    moodTimer = setTimeout(function(){ setMood("idle"); }, 2400);
+  },
+  onSleep: function () { setMood("sleep"); },
+  onWake: function () { setMood("idle"); }
+};
+</script>
+</body>
+</html>

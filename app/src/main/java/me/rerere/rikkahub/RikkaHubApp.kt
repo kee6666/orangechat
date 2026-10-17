@@ -145,6 +145,8 @@ class RikkaHubApp : Application() {
 
         // 灵动岛服务待命（有悬浮窗权限才启动，内部静默失败）
         runCatching { me.rerere.rikkahub.service.IslandService.poke(this) }
+        // 言·桌宠：开关开着且有悬浮窗权限就起来
+        runCatching { me.rerere.rikkahub.service.PetOverlayService.poke(this) }
 
         // Init QuickJS native library
         QuickJSLoader.init()

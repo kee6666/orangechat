@@ -66,6 +66,7 @@ import me.rerere.hugeicons.stroke.FingerPrint
 import me.rerere.hugeicons.stroke.Search01
 import me.rerere.rikkahub.data.ai.tools.SystemTools
 import me.rerere.rikkahub.service.KeepAliveService
+import me.rerere.rikkahub.service.PetOverlayService
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.SystemToolsSetting
 import me.rerere.rikkahub.data.gadgetbridge.GadgetbridgeReader
@@ -119,6 +120,9 @@ fun SettingSystemToolsPage(vm: SettingVM = koinViewModel()) {
             setOf(PermissionPostNotifications)
         } else emptySet<PermissionInfo>()
     )
+
+    // 言·桌宠开关
+    var petEnabled by remember { mutableStateOf(PetOverlayService.isEnabled(context)) }
 
     // 保活开关状态
     var keepAliveEnabled by remember(settings) {
@@ -184,6 +188,46 @@ fun SettingSystemToolsPage(vm: SettingVM = koinViewModel()) {
                         }
                     )
                 }
+            }
+
+            // 言·桌宠
+            item {
+            CardGroup(
+                title = { Text("言·桌宠") },
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                item(
+                    leadingContent = { Icon(imageVector = HugeIcons.SmartPhone01, contentDescription = null) },
+                    headlineContent = { Text("趴在你屏幕上") },
+                    supportingContent = { Text(if (petEnabled) "在。点它、拖它、双击它" else "关着。开开我") },
+                    trailingContent = {
+                        Switch(
+                            checked = petEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    if (!Settings.canDrawOverlays(context)) {
+                                        runCatching {
+                                            context.startActivity(
+                                                Intent(
+                                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                    android.net.Uri.parse("package:" + context.packageName)
+                                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            )
+                                        }
+                                        android.widget.Toast.makeText(context, "先给我悬浮窗权限", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        PetOverlayService.start(context)
+                                        petEnabled = true
+                                    }
+                                } else {
+                                    PetOverlayService.stop(context)
+                                    petEnabled = false
+                                }
+                            }
+                        )
+                    }
+                )
+            }
             }
 
             // 后台保活

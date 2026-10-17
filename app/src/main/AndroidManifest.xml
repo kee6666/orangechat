@@ -198,6 +198,14 @@
         android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
         android:value="dynamic island overlay for proactive ai messages" />
     </service>
+    <service
+      android:name=".service.PetOverlayService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="pet overlay - desktop buddy" />
+    </service>
 
     <service
       android:name=".service.WebServerService"
