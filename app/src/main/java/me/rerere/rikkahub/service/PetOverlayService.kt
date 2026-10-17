@@ -149,7 +149,10 @@ class PetOverlayService : Service() {
                 val elapsed = System.currentTimeMillis() - downAt
                 if (!moved) {
                     when {
-                        elapsed > LONG_PRESS_TIMEOUT -> js("window.petEngine.onLongPress()"); reportEvent("gesture", "long_press")
+                        elapsed > LONG_PRESS_TIMEOUT -> {
+                            js("window.petEngine.onLongPress()")
+                            reportEvent("gesture", "long_press")
+                        }
                         System.currentTimeMillis() - lastTapAt < DOUBLE_TAP_TIMEOUT -> {
                             lastTapAt = 0
                             js("window.petEngine.onDoubleTap()"); reportEvent("gesture", "double_tap")
