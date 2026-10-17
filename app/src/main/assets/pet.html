@@ -158,15 +158,19 @@ var BUBBLE_COLORS = {
   green: "#d7f0d0"
 };
 var bubbleTimer = null;
+function hostBubble(v) {
+  try { if (window.petHost && window.petHost.bubble) window.petHost.bubble(v); } catch (e) {}
+}
 function say(text, color) {
   if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
   bubble.textContent = text;
   bubble.style.background = BUBBLE_COLORS[color] || BUBBLE_COLORS.normal;
   bubble.style.visibility = "visible";
   bubble.style.opacity = 1;
+  hostBubble(1);
   bubbleTimer = setTimeout(function () {
     bubble.style.opacity = 0;
-    setTimeout(function () { bubble.style.visibility = "hidden"; }, 200);
+    setTimeout(function () { bubble.style.visibility = "hidden"; hostBubble(0); }, 200);
   }, 3200);
 }
 
@@ -186,6 +190,7 @@ function idleChatter() {
   say(pick(pool), colors[Math.floor(Math.random() * colors.length)]);
 }
 setInterval(idleChatter, 26000);
+hostBubble(0);
 
 /* ============ 手势反馈（native 调用） ============ */
 window.petEngine = {

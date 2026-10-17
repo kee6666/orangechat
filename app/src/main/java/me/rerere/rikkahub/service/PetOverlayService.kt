@@ -20,12 +20,15 @@ import android.content.SharedPreferences
 import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import org.json.JSONObject
@@ -52,10 +55,13 @@ class PetOverlayService : Service() {
     private var lastForegroundPkg = ""
     private var stateJob: Job? = null
     private var lastVersion = -1
+    private var baseY = 0
+    private var bubbleShown = false
 
     // 手势状态机
     private var startX = 0
     private var startY = 0
+    private var startBaseY = 0
     private var downX = 0f
     private var downY = 0f
     private var downAt = 0L
@@ -84,13 +90,40 @@ class PetOverlayService : Service() {
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
+    private val PET_W get() = dp(142)
+    private val PET_H_SMALL get() = dp(60)
+    private val PET_H_FULL get() = dp(212)
+
+    /** 网页那边说气泡出了没：没气泡时窗口只包住身体，点空白不再误拖 */
+    inner class Bridge {
+        @JavascriptInterface
+        fun bubble(show: Int) {
+            Handler(Looper.getMainLooper()).post { setBubble(show == 1) }
+        }
+    }
+
+    private fun setBubble(show: Boolean) {
+        if (bubbleShown == show) return
+        val lp = winLp ?: return
+        bubbleShown = show
+        lp.height = if (show) PET_H_FULL else PET_H_SMALL
+        applyLayout(lp)
+    }
+
+    /** y 永远以「没气泡时的窗口」为基准，撑高时往上挪，身体不跳 */
+    private fun applyLayout(lp: WindowManager.LayoutParams) {
+        lp.y = baseY - if (bubbleShown) (PET_H_FULL - PET_H_SMALL) else 0
+        runCatching { wm?.updateViewLayout(web, lp) }
+    }
+
     private fun ensureView() {
         if (web != null) return
         try {
             val manager = getSystemService(WINDOW_SERVICE) as WindowManager
+            baseY = prefs?.getInt(KEY_Y, dp(300)) ?: dp(300)
             val lp = WindowManager.LayoutParams(
-                dp(142),
-                dp(212),
+                PET_W,
+                PET_H_SMALL,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -99,7 +132,7 @@ class PetOverlayService : Service() {
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
                 x = prefs?.getInt(KEY_X, dp(24)) ?: dp(24)
-                y = prefs?.getInt(KEY_Y, dp(300)) ?: dp(300)
+                y = baseY
             }
 
             val w = WebView(this).apply {
@@ -111,6 +144,7 @@ class PetOverlayService : Service() {
                     allowFileAccess = true
                     cacheMode = WebSettings.LOAD_NO_CACHE
                 }
+                addJavascriptInterface(Bridge(), "petHost")
                 loadUrl("file:///android_asset/pet.html")
             }
 
@@ -127,7 +161,7 @@ class PetOverlayService : Service() {
         val lp = winLp ?: return false
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                startX = lp.x; startY = lp.y
+                startX = lp.x; startY = lp.y; startBaseY = baseY
                 downX = ev.rawX; downY = ev.rawY
                 downAt = System.currentTimeMillis()
                 moved = false
@@ -141,8 +175,8 @@ class PetOverlayService : Service() {
                 }
                 if (moved) {
                     lp.x = startX + dx
-                    lp.y = startY + dy
-                    wm?.updateViewLayout(web, lp)
+                    baseY = startBaseY + dy
+                    applyLayout(lp)
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -167,7 +201,7 @@ class PetOverlayService : Service() {
                     val dx = (ev.rawX - downX).toInt()
                     val dy = (ev.rawY - downY).toInt()
                     val fast = elapsed in 1..FLING_MS && abs(dx) > FLING_PX
-                    savePos(lp.x, lp.y)
+                    savePos(lp.x, baseY)
                     js(if (fast) "window.petEngine.onFling($dx)" else "window.petEngine.onDragEnd()")
                     reportEvent("gesture", if (fast) "fling" else "drag_end")
                     if (fast) flingBack(lp, dx, dy)
@@ -179,24 +213,24 @@ class PetOverlayService : Service() {
 
     /** 甩出去后爬回原位置 */
     private fun flingBack(lp: WindowManager.LayoutParams, dx: Int, dy: Int) {
-        val targetX = lp.x; val targetY = lp.y
+        val targetX = lp.x; val targetY = baseY
         val kickX = (dx / 3).coerceIn(-dp(60), dp(60))
         val kickY = (dy / 3).coerceIn(-dp(40), dp(40))
-        lp.x += kickX; lp.y += kickY
-        wm?.updateViewLayout(web, lp)
+        lp.x += kickX; baseY += kickY
+        applyLayout(lp)
         scope.launch {
             delay(90)
-            val fromX = lp.x; val fromY = lp.y
+            val fromX = lp.x; val fromY = baseY
             val steps = 10
             for (i in 1..steps) {
                 if (!scope.isActive) break
                 val t = i.toFloat() / steps
                 lp.x = (fromX + (targetX - fromX) * t).toInt()
-                lp.y = (fromY + (targetY - fromY) * t).toInt()
-                wm?.updateViewLayout(web, lp)
+                baseY = (fromY + (targetY - fromY) * t).toInt()
+                applyLayout(lp)
                 delay(28)
             }
-            savePos(lp.x, lp.y)
+            savePos(lp.x, baseY)
         }
     }
 
