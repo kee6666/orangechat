@@ -97,7 +97,6 @@ class PetOverlayService : Service() {
 
             val w = WebView(this).apply {
                 setBackgroundColor(0x00000000)
-                isHardwareAccelerated = true
                 setOnTouchListener { _, ev -> handleTouch(ev) }
                 settings.apply {
                     javaScriptEnabled = true
