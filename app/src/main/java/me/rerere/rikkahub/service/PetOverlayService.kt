@@ -28,6 +28,9 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.WebSettings
 import android.webkit.WebView
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,6 +38,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 class PetOverlayService : Service() {
@@ -46,6 +50,8 @@ class PetOverlayService : Service() {
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var usageJob: Job? = null
     private var lastForegroundPkg = ""
+    private var stateJob: Job? = null
+    private var lastVersion = -1
 
     // 手势状态机
     private var startX = 0
@@ -62,6 +68,7 @@ class PetOverlayService : Service() {
         startForegroundQuietly()
         ensureView()
         startUsagePolling()
+        startStatePolling()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -82,8 +89,8 @@ class PetOverlayService : Service() {
         try {
             val manager = getSystemService(WINDOW_SERVICE) as WindowManager
             val lp = WindowManager.LayoutParams(
-                dp(190),
-                dp(280),
+                dp(142),
+                dp(212),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -142,14 +149,15 @@ class PetOverlayService : Service() {
                 val elapsed = System.currentTimeMillis() - downAt
                 if (!moved) {
                     when {
-                        elapsed > LONG_PRESS_TIMEOUT -> js("window.petEngine.onLongPress()")
+                        elapsed > LONG_PRESS_TIMEOUT -> js("window.petEngine.onLongPress()"); reportEvent("gesture", "long_press")
                         System.currentTimeMillis() - lastTapAt < DOUBLE_TAP_TIMEOUT -> {
                             lastTapAt = 0
-                            js("window.petEngine.onDoubleTap()")
+                            js("window.petEngine.onDoubleTap()"); reportEvent("gesture", "double_tap")
                         }
                         else -> {
                             lastTapAt = System.currentTimeMillis()
                             js("window.petEngine.onTap()")
+                            reportEvent("gesture", "tap")
                         }
                     }
                 } else {
@@ -158,6 +166,7 @@ class PetOverlayService : Service() {
                     val fast = elapsed in 1..FLING_MS && abs(dx) > FLING_PX
                     savePos(lp.x, lp.y)
                     js(if (fast) "window.petEngine.onFling($dx)" else "window.petEngine.onDragEnd()")
+                    reportEvent("gesture", if (fast) "fling" else "drag_end")
                     if (fast) flingBack(lp, dx, dy)
                 }
             }
@@ -219,6 +228,7 @@ class PetOverlayService : Service() {
         if (cur != lastForegroundPkg && cur != packageName) {
             lastForegroundPkg = cur
             js("window.petEngine.onAppChange(${quote(cur)})")
+            reportEvent("app_change", cur)
         }
     }
 
@@ -237,6 +247,57 @@ class PetOverlayService : Service() {
 
     fun mood(m: String) {
         js("window.petEngine.setMood(${quote(m)})")
+    }
+
+    /* ---------- 通信（VPS /pet） ---------- */
+
+    private fun http(urlStr: String, body: String?): String? = try {
+        val c = URL(urlStr).openConnection() as HttpURLConnection
+        c.connectTimeout = 4000
+        c.readTimeout = 4000
+        c.setRequestProperty("X-Pet-Key", PET_KEY)
+        if (body != null) {
+            c.requestMethod = "POST"
+            c.doOutput = true
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            c.outputStream.use { it.write(body.toByteArray()) }
+        }
+        val code = c.responseCode
+        val txt = (if (code in 200..299) c.inputStream else c.errorStream)
+            ?.bufferedReader()?.use { it.readText() }
+        c.disconnect()
+        if (code in 200..299) txt else null
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun reportEvent(type: String, pkg: String) {
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    http(BASE + "/pet/event", "{\"type\":\"$type\",\"pkg\":\"$pkg\"}")
+                }
+            }
+        }
+    }
+
+    /** 拉我（大脑）写下的状态：变了就开口 */
+    private fun startStatePolling() {
+        stateJob?.cancel()
+        stateJob = scope.launch {
+            while (isActive) {
+                delay(2000)
+                val txt = withContext(Dispatchers.IO) { http(BASE + "/pet/state", null) } ?: continue
+                val o = runCatching { JSONObject(txt) }.getOrNull() ?: continue
+                val v = o.optInt("version", -1)
+                if (v == lastVersion) continue
+                lastVersion = v
+                val sp = o.optString("speech", "")
+                val md = o.optString("mood", "")
+                if (md.isNotEmpty() && md != "idle") mood(md)
+                if (sp.isNotEmpty()) say(sp, o.optString("color", "normal"))
+            }
+        }
     }
 
     private fun startForegroundQuietly() {
@@ -260,6 +321,7 @@ class PetOverlayService : Service() {
 
     override fun onDestroy() {
         usageJob?.cancel()
+        stateJob?.cancel()
         web?.let { runCatching { wm?.removeView(it) } }
         web?.destroy()
         web = null
@@ -277,6 +339,8 @@ class PetOverlayService : Service() {
         const val EXTRA_COLOR = "color"
         const val EXTRA_MOOD = "mood"
         private const val NOTIFICATION_ID = 5252
+        private const val BASE = "http://106.53.181.56:3010"
+        private const val PET_KEY = "ypet2026"
         private const val PREFS = "pet_overlay"
         private const val KEY_X = "x"
         private const val KEY_Y = "y"
