@@ -17,7 +17,9 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -28,6 +30,8 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.TextView
+import android.util.TypedValue
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -57,6 +61,8 @@ class PetOverlayService : Service() {
     private var lastVersion = -1
     private var baseY = 0
     private var bubbleShown = false
+    private var bubbleView: TextView? = null
+    private var bubbleLp: WindowManager.LayoutParams? = null
 
     // 手势状态机
     private var startX = 0
@@ -90,30 +96,101 @@ class PetOverlayService : Service() {
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
-    private val PET_W get() = dp(142)
+    private val PET_W get() = dp(126)
     private val PET_H_SMALL get() = dp(60)
-    private val PET_H_FULL get() = dp(212)
+    /** 小人在窗口里 112dp 宽，居中 */
+    private val PET_CX get() = dp(63)
+    /** 气泡单独一个窗口：主窗口尺寸从此不再变化，气泡进出不会把它顶得上下弹 */
+    private val BUBBLE_MAX_W get() = dp(150)
 
-    /** 网页那边说气泡出了没：没气泡时窗口只包住身体，点空白不再误拖 */
+    /** 网页要说话：文字交给独立小窗，主窗口一像素都不动 */
     inner class Bridge {
         @JavascriptInterface
-        fun bubble(show: Int) {
-            Handler(Looper.getMainLooper()).post { setBubble(show == 1) }
+        fun bubble(show: Int, text: String, color: String) {
+            Handler(Looper.getMainLooper()).post {
+                if (show == 1) showBubble(text, color) else hideBubble()
+            }
         }
     }
 
-    private fun setBubble(show: Boolean) {
-        if (bubbleShown == show) return
-        val lp = winLp ?: return
-        bubbleShown = show
-        lp.height = if (show) PET_H_FULL else PET_H_SMALL
-        applyLayout(lp)
+    private fun bubbleColor(c: String): Int = when (c) {
+        "pink" -> 0xFFFFD9E2.toInt()
+        "gray" -> 0xFFD9D9DE.toInt()
+        "red" -> 0xFFFFD4C9.toInt()
+        "green" -> 0xFFD7F0D0.toInt()
+        else -> 0xFFF2F2F4.toInt()
     }
 
-    /** y 永远以「没气泡时的窗口」为基准，撑高时往上挪，身体不跳 */
+    private fun ensureBubbleView() {
+        if (bubbleView != null) return
+        val bv = TextView(this).apply {
+            setTextColor(0xFF26262C.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setPadding(dp(11), dp(8), dp(11), dp(8))
+            maxWidth = BUBBLE_MAX_W
+            alpha = 0f
+            includeFontPadding = false
+        }
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+        }
+        runCatching { wm?.addView(bv, lp) }.onSuccess {
+            bubbleView = bv
+            bubbleLp = lp
+        }
+    }
+
+    private fun showBubble(text: String, color: String) {
+        if (text.isEmpty()) return
+        ensureBubbleView()
+        val bv = bubbleView ?: return
+        bubbleShown = true
+        bv.background = GradientDrawable().apply {
+            cornerRadius = dp(14).toFloat()
+            setColor(bubbleColor(color))
+        }
+        bv.text = text
+        positionBubble()
+        bv.animate().cancel()
+        bv.animate().alpha(1f).setDuration(140).start()
+    }
+
+    private fun hideBubble() {
+        if (!bubbleShown) return
+        bubbleShown = false
+        val bv = bubbleView ?: return
+        bv.animate().cancel()
+        bv.animate().alpha(0f).setDuration(140).start()
+    }
+
+    /** 气泡底边贴在小人头顶，跟着身体一起走 */
+    private fun positionBubble() {
+        val bv = bubbleView ?: return
+        val blp = bubbleLp ?: return
+        val lp = winLp ?: return
+        val wSpec = View.MeasureSpec.makeMeasureSpec(BUBBLE_MAX_W, View.MeasureSpec.AT_MOST)
+        bv.measure(wSpec, View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        val h = bv.measuredHeight
+        val w = bv.measuredWidth
+        if (h <= 0) return
+        blp.x = lp.x + PET_CX - w / 2
+        blp.y = baseY + dp(7) - h
+        runCatching { wm?.updateViewLayout(bv, blp) }
+    }
+
     private fun applyLayout(lp: WindowManager.LayoutParams) {
-        lp.y = baseY - if (bubbleShown) (PET_H_FULL - PET_H_SMALL) else 0
         runCatching { wm?.updateViewLayout(web, lp) }
+        if (bubbleShown) positionBubble()
     }
 
     private fun ensureView() {
@@ -136,7 +213,10 @@ class PetOverlayService : Service() {
             }
 
             val w = WebView(this).apply {
-                setBackgroundColor(0x00000000)
+                setBackgroundColor(Color.TRANSPARENT)
+                overScrollMode = View.OVER_SCROLL_NEVER
+                isVerticalScrollBarEnabled = false
+                isHorizontalScrollBarEnabled = false
                 setOnTouchListener { _, ev -> handleTouch(ev) }
                 settings.apply {
                     javaScriptEnabled = true
@@ -152,6 +232,7 @@ class PetOverlayService : Service() {
             web = w
             winLp = lp
             manager.addView(w, lp)
+            ensureBubbleView()
         } catch (_: Exception) {
             web = null
         }
@@ -171,6 +252,7 @@ class PetOverlayService : Service() {
                 val dy = (ev.rawY - downY).toInt()
                 if (!moved && (abs(dx) > MOVE_THRESHOLD || abs(dy) > MOVE_THRESHOLD)) {
                     moved = true
+                    hideBubble()
                     js("window.petEngine.onDragStart()")
                 }
                 if (moved) {
@@ -359,6 +441,8 @@ class PetOverlayService : Service() {
     override fun onDestroy() {
         usageJob?.cancel()
         stateJob?.cancel()
+        bubbleView?.let { runCatching { wm?.removeView(it) } }
+        bubbleView = null
         web?.let { runCatching { wm?.removeView(it) } }
         web?.destroy()
         web = null

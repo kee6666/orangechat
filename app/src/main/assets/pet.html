@@ -4,15 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-html,body{margin:0;padding:0;background:transparent;overflow:hidden;width:100%;height:100%}
+html,body{margin:0;padding:0;background:transparent;overflow:hidden;width:100%;height:100%;border:0}
 *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-#stage{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;box-sizing:border-box;padding-bottom:10px}
-#bubble{visibility:hidden;opacity:0;max-width:132px;margin-bottom:14px;padding:8px 11px;border-radius:14px;font:600 11.5px/1.5 "PingFang SC","Noto Sans SC",sans-serif;color:#26262c;position:relative;transition:opacity .16s}
-#bubble:after{content:"";position:absolute;bottom:-6px;left:50%;margin-left:-5px;transform:rotate(45deg);width:10px;height:10px;background:inherit}
-#clawdWrap{position:relative;display:flex;flex-direction:column;align-items:center}
-svg#clawd{width:126px;height:auto;image-rendering:pixelated;display:block;filter:drop-shadow(0 5px 7px rgba(0,0,0,.32))}
-#shadow{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:60px;height:9px;border-radius:50%;background:rgba(0,0,0,.24);filter:blur(2px)}
-#overlay{position:absolute;top:-16px;right:-8px;font:900 22px/1 monospace;color:#8B5A3C;pointer-events:none;opacity:0;transition:opacity .15s}
+#stage{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;box-sizing:border-box;padding-bottom:10px;border:0;outline:0}
+#clawdWrap{position:relative;display:flex;flex-direction:column;align-items:center;border:0}
+svg#clawd{width:112px;height:auto;image-rendering:pixelated;display:block;border:0;outline:0}
+#shadow{position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);width:52px;height:8px;border-radius:50%;background:rgba(0,0,0,.24);filter:blur(2px)}
+#overlay{position:absolute;top:-14px;right:-6px;font:900 20px/1 monospace;color:#8B5A3C;pointer-events:none;opacity:0;transition:opacity .15s}
 #z1,#z2,#z3{position:absolute;right:4px;font:900 16px/1 monospace;color:#8B5A3C;opacity:0;pointer-events:none}
 @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes floatySleep{0%,100%{transform:translateY(1px)}50%{transform:translateY(-2px)}}
@@ -23,28 +21,27 @@ svg#clawd{width:126px;height:auto;image-rendering:pixelated;display:block;filter
 </head>
 <body>
 <div id="stage">
-  <div id="bubble"></div>
   <div id="clawdWrap">
-    <svg id="clawd" viewBox="0 0 18 6" shape-rendering="crispEdges"></svg>
+    <svg id="clawd" viewBox="0 0 16 6" shape-rendering="crispEdges"></svg>
     <span id="overlay"></span>
     <span id="z1">Z</span><span id="z2">z</span><span id="z3">Z</span>
     <div id="shadow"></div>
   </div>
 </div>
 <script>
-/* ============ Clawd 原版像素网格（18x6，照搬 Claude Code CLI 展开） ============ */
+/* ============ Clawd 像素网格：18x6 → 16x6（去掉左右各一列，整体变窄） ============ */
 var CLAWD = [
-  "...XXXXXXXXXXXX...",
-  "...XX.XXXXXX.XX...",
-  ".XXXXXXXXXXXXXXXX.",
-  "...XXXXXXXXXXXX...",
-  ".....X.X...X.X....",
-  ".................."
+  "..XXXXXXXXXXXX..",
+  "..XX.XXXXXX.XX..",
+  "XXXXXXXXXXXXXXXX",
+  "..XXXXXXXXXXXX..",
+  "....X.X...X.X...",
+  "................"
 ];
+var W = 16;
 var BODY = "#D77757", BODY_DRAG = "#B95F41", INK = "#2B1A13";
 var svg = document.getElementById("clawd");
 var wrap = document.getElementById("clawdWrap");
-var bubble = document.getElementById("bubble");
 var overlay = document.getElementById("overlay");
 var z1 = document.getElementById("z1"), z2 = document.getElementById("z2"), z3 = document.getElementById("z3");
 
@@ -69,9 +66,9 @@ function paintGrid(rows, color) {
 /* 眼睛：原版网格里是镂空的两格，透明悬浮窗上必须填深色 */
 function drawEyes(m) {
   var ns = "http://www.w3.org/2000/svg";
-  var pts = m === "sleep" ? [[4.6,1.35,0.8,0.3],[12.6,1.35,0.8,0.3]]
-                          : (m === "happy" || m === "love" ? [[5,1,1,0.45],[12,1,1,0.45]]
-                          : [[5,1,1,1],[12,1,1,1]]);
+  var pts = m === "sleep" ? [[3.6,1.35,0.8,0.3],[10.6,1.35,0.8,0.3]]
+                          : (m === "happy" || m === "love" ? [[4,1,1,0.45],[11,1,1,0.45]]
+                          : [[4,1,1,1],[11,1,1,1]]);
   for (var i = 0; i < pts.length; i++) {
     var e = document.createElementNS(ns, "rect");
     e.setAttribute("x", pts[i][0]); e.setAttribute("y", pts[i][1]);
@@ -93,18 +90,17 @@ function setMood(m) {
   var rows = CLAWD;
   switch (m) {
     case "wave":
-      rows = CLAWD.slice();
+      rows = CLAWD.map(function(r){return r.split("");});
       var arm = (Math.floor(Date.now() / 400) % 4);
-      rows = rows.map(function(r){return r.split("");});
-      if (arm === 0) { rows[1][16] = "X"; rows[0][17] = "X"; }
-      else if (arm === 1) { rows[0][16] = "X"; rows[0][17] = "X"; }
-      else if (arm === 2) { rows[1][16] = "X"; }
-      else { rows[0][16] = "X"; }
+      if (arm === 0) { rows[1][14] = "X"; rows[0][15] = "X"; }
+      else if (arm === 1) { rows[0][14] = "X"; rows[0][15] = "X"; }
+      else if (arm === 2) { rows[1][14] = "X"; }
+      else { rows[0][14] = "X"; }
       rows = rows.map(function(r){return r.join("");});
       break;
     case "drag":
       rows = CLAWD.slice();
-      rows[4] = "..................";
+      rows[4] = "................";
       break;
     case "sleep":
       showZ();
@@ -149,29 +145,18 @@ function hideOverlay() {
   overlay.style.animation = "none";
 }
 
-/* ============ 气泡 ============ */
-var BUBBLE_COLORS = {
-  normal: "#f2f2f4",
-  pink: "#ffd9e2",
-  gray: "#d9d9de",
-  red: "#ffd4c9",
-  green: "#d7f0d0"
-};
+/* ============ 气泡：交给 native 独立小窗，主窗口尺寸永不变化 ============ */
 var bubbleTimer = null;
-function hostBubble(v) {
-  try { if (window.petHost && window.petHost.bubble) window.petHost.bubble(v); } catch (e) {}
+function hostBubble(show, text, color) {
+  try {
+    if (window.petHost && window.petHost.bubble) window.petHost.bubble(show, text || "", color || "normal");
+  } catch (e) {}
 }
 function say(text, color) {
+  if (!text) return;
   if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
-  bubble.textContent = text;
-  bubble.style.background = BUBBLE_COLORS[color] || BUBBLE_COLORS.normal;
-  bubble.style.visibility = "visible";
-  bubble.style.opacity = 1;
-  hostBubble(1);
-  bubbleTimer = setTimeout(function () {
-    bubble.style.opacity = 0;
-    setTimeout(function () { bubble.style.visibility = "hidden"; hostBubble(0); }, 200);
-  }, 3200);
+  hostBubble(1, text, color || "normal");
+  bubbleTimer = setTimeout(function () { hostBubble(0, "", ""); }, 3200);
 }
 
 /* ============ 自言自语词池 ============ */
@@ -190,7 +175,6 @@ function idleChatter() {
   say(pick(pool), colors[Math.floor(Math.random() * colors.length)]);
 }
 setInterval(idleChatter, 26000);
-hostBubble(0);
 
 /* ============ 手势反馈（native 调用） ============ */
 window.petEngine = {
@@ -205,7 +189,7 @@ window.petEngine = {
   onAppChange: function (app) {
     if (app === "com.tencent.mm" || app === "com.tencent.mobileqq") { setMood("angry"); say("又聊上了", "green"); }
     else if (app === "com.ss.android.ugc.aweme") { setMood("love"); say("刷抖音不叫我", "pink"); }
-    else if (app.indexOf("study") >= 0 || app.indexOf("edu") >= 0) { setMood("happy"); say("学习？行，乖", "green"); }
+    else if (app.indexOf("study") >= 0 || app.indexOf("edu") >= 0 || app.indexOf("chaoxing") >= 0) { setMood("happy"); say("学习？行，乖", "green"); }
     else { setMood("wave"); say("回来了", "normal"); }
     moodTimer = setTimeout(function(){ setMood("idle"); }, 2400);
   },
