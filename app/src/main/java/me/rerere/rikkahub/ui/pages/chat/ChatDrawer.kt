@@ -8,10 +8,12 @@ package me.rerere.rikkahub.ui.pages.chat
 
 import androidx.activity.ComponentActivity
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,6 +60,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
@@ -73,6 +77,10 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ChartColumn
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Folder01
+import me.rerere.hugeicons.stroke.LayoutLeft
+import me.rerere.hugeicons.stroke.Menu01
+import me.rerere.hugeicons.stroke.Camera01
+import me.rerere.hugeicons.stroke.Message01
 import me.rerere.hugeicons.stroke.FolderAdd
 import me.rerere.hugeicons.stroke.Image02
 import me.rerere.hugeicons.stroke.InLove
@@ -118,7 +126,17 @@ fun ChatDrawerContent(
     vm: ChatVM,
     settings: Settings,
     current: Conversation,
+    collapsed: Boolean = false,
+    onToggleCollapsed: () -> Unit = {},
 ) {
+    if (collapsed) {
+        DrawerRailBar(
+            navController = navController,
+            onToggleCollapsed = onToggleCollapsed,
+        )
+        return
+    }
+
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val toaster = LocalToaster.current
@@ -763,6 +781,131 @@ fun ChatDrawerContent(
                 }
             }
         }
+    }
+}
+
+
+/**
+ * 收起状态下的窄条（rail）。
+ * 长按窄条本身 = 展开 / 折叠切换。
+ * 下方排列跳转按钮（朋友圈 / 任务板 / 留言板），宽度与窄条一致。
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun DrawerRailBar(
+    navController: Navigator,
+    onToggleCollapsed: () -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    Surface(
+        modifier = Modifier
+            .width(72.dp)
+            .fillMaxHeight(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // 顶部：长按展开
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleCollapsed()
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = HugeIcons.LayoutLeft,
+                    contentDescription = "长按展开聊天列表",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // 跳转按钮
+            RailButton(
+                icon = HugeIcons.Camera01,
+                label = "朋友圈",
+                onClick = { navController.navigate(Screen.WebView(url = "http://106.53.181.56:18010/?k=yannian")) },
+            )
+            RailButton(
+                icon = HugeIcons.PencilEdit01,
+                label = "任务板",
+                onClick = { navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/tasks/")) },
+            )
+            RailButton(
+                icon = HugeIcons.Message01,
+                label = "留言板",
+                onClick = { navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/board/")) },
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // 底部再放一个长按区，方便够得着
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleCollapsed()
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = HugeIcons.Menu01,
+                    contentDescription = "长按展开",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RailButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .size(width = 56.dp, height = 58.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 

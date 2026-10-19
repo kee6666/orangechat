@@ -9,6 +9,7 @@ package me.rerere.rikkahub.ui.pages.chat
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -131,6 +132,8 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
     val errors by vm.errors.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    // 抽屉窄条/展开状态（长按窄条切换）
+    var drawerCollapsed by rememberSaveable { mutableStateOf(false) }
     val softwareKeyboardController = LocalSoftwareKeyboardController.current
 
     // Handle back press when drawer is open
@@ -205,7 +208,9 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
                         navController = navController,
                         current = conversation,
                         vm = vm,
-                        settings = setting
+                        settings = setting,
+                        collapsed = drawerCollapsed,
+                        onToggleCollapsed = { drawerCollapsed = !drawerCollapsed },
                     )
                 }
             ) {
@@ -232,6 +237,15 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
         }
 
         else -> {
+            // 常驻窄条：抽屉关着时也能看到，长按展开完整列表
+            Row(modifier = Modifier.fillMaxSize()) {
+                DrawerRailBar(
+                    navController = navController,
+                    onToggleCollapsed = {
+                        scope.launch { drawerState.open() }
+                    },
+                )
+                Box(modifier = Modifier.weight(1f)) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 drawerContent = {
@@ -239,7 +253,9 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
                         navController = navController,
                         current = conversation,
                         vm = vm,
-                        settings = setting
+                        settings = setting,
+                        collapsed = drawerCollapsed,
+                        onToggleCollapsed = { drawerCollapsed = !drawerCollapsed },
                     )
                 }
             ) {
@@ -265,6 +281,8 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
             }
             BackHandler(drawerState.isOpen) {
                 scope.launch { drawerState.close() }
+            }
+                }
             }
         }
     }
