@@ -96,10 +96,25 @@ class PetOverlayService : Service() {
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
+    /** 可用屏幕高度（含状态栏，用真实屏高更保险） */
+    private fun screenH(): Int {
+        val m = resources.displayMetrics
+        val h = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            runCatching {
+                val b = getSystemService(WindowManager::class.java)!!.currentWindowMetrics.bounds
+                b.height()
+            }.getOrDefault(m.heightPixels)
+        } else m.heightPixels
+        return h
+    }
+
     private val PET_W get() = dp(126)
+    /** 窗口高度不动（60dp）。小人 112dp 宽 → SVG 高 42dp，底部留 4dp 给阴影 */
     private val PET_H_SMALL get() = dp(60)
     /** 小人在窗口里 112dp 宽，居中 */
     private val PET_CX get() = dp(63)
+    /** 小人头顶在窗口内的 y：窗口高 - 底部留白 - 小人高 */
+    private val PET_HEAD_IN_WIN get() = PET_H_SMALL - dp(4) - dp(42)
     /** 气泡单独一个窗口：主窗口尺寸从此不再变化，气泡进出不会把它顶得上下弹 */
     private val BUBBLE_MAX_W get() = dp(150)
 
@@ -183,12 +198,16 @@ class PetOverlayService : Service() {
         val h = bv.measuredHeight
         val w = bv.measuredWidth
         if (h <= 0) return
+        // 气泡底边压在小人头顶往上 2dp，跟着身体一起走
         blp.x = lp.x + PET_CX - w / 2
-        blp.y = baseY + dp(7) - h
+        blp.y = baseY + PET_HEAD_IN_WIN - h - dp(2)
         runCatching { wm?.updateViewLayout(bv, blp) }
     }
 
     private fun applyLayout(lp: WindowManager.LayoutParams) {
+        // baseY 是唯一真相，每次布局都回写，否则窗口 y 永远不动 → 上下拖不动
+        lp.y = baseY.coerceIn(-dp(20), screenH() - dp(8))
+        baseY = lp.y
         runCatching { wm?.updateViewLayout(web, lp) }
         if (bubbleShown) positionBubble()
     }
@@ -197,7 +216,10 @@ class PetOverlayService : Service() {
         if (web != null) return
         try {
             val manager = getSystemService(WINDOW_SERVICE) as WindowManager
-            baseY = prefs?.getInt(KEY_Y, dp(300)) ?: dp(300)
+            // 存的位置可能在屏幕外（旧 bug 拖出去的），不合理就拉回中间
+            val savedY = prefs?.getInt(KEY_Y, dp(300)) ?: dp(300)
+            baseY = savedY.coerceIn(0, (screenH() - dp(80)).coerceAtLeast(0))
+            if (baseY != savedY) savePos(prefs?.getInt(KEY_X, dp(24)) ?: dp(24), baseY)
             val lp = WindowManager.LayoutParams(
                 PET_W,
                 PET_H_SMALL,
@@ -258,7 +280,7 @@ class PetOverlayService : Service() {
                 if (moved) {
                     lp.x = startX + dx
                     baseY = startBaseY + dy
-                    applyLayout(lp)
+                    applyLayout(lp)   // 内部会把 baseY 回写进 lp.y 并限位
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
