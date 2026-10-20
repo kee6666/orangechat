@@ -667,14 +667,6 @@ private fun TopBar(
                     onDismissRequest = { folderExpanded = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("留言板") },
-                        leadingIcon = { Icon(HugeIcons.InLove, contentDescription = null) },
-                        onClick = {
-                            folderExpanded = false
-                            onOpenBoard()
-                        }
-                    )
-                    DropdownMenuItem(
                         text = { Text("心潮") },
                         leadingIcon = { Icon(HugeIcons.HeartPulse, contentDescription = null) },
                         onClick = {

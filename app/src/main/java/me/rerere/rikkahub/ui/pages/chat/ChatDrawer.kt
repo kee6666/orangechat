@@ -531,30 +531,6 @@ fun ChatDrawerContent(
 
                 DrawerAction(
                     icon = {
-                        Icon(HugeIcons.PencilEdit01, "每日任务")
-                    },
-                    label = {
-                        Text("每日任务")
-                    },
-                    onClick = {
-                        navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/tasks/"))
-                    },
-                )
-
-                DrawerAction(
-                    icon = {
-                        Icon(HugeIcons.Sparkles, "拾光·记忆")
-                    },
-                    label = {
-                        Text("拾光·记忆")
-                    },
-                    onClick = {
-                        navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/shiguang/"))
-                    },
-                )
-
-                DrawerAction(
-                    icon = {
                         Icon(HugeIcons.Settings03, null)
                     },
                     label = { Text(stringResource(R.string.settings)) },
