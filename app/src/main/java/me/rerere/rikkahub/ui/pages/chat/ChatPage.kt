@@ -132,8 +132,6 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
     val errors by vm.errors.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    // 抽屉窄条/展开状态（长按窄条切换）
-    var drawerCollapsed by rememberSaveable { mutableStateOf(false) }
     val softwareKeyboardController = LocalSoftwareKeyboardController.current
 
     // Handle back press when drawer is open
@@ -209,8 +207,6 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
                         current = conversation,
                         vm = vm,
                         settings = setting,
-                        collapsed = drawerCollapsed,
-                        onToggleCollapsed = { drawerCollapsed = !drawerCollapsed },
                     )
                 }
             ) {
@@ -245,8 +241,6 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
                         current = conversation,
                         vm = vm,
                         settings = setting,
-                        collapsed = drawerCollapsed,
-                        onToggleCollapsed = { drawerCollapsed = !drawerCollapsed },
                     )
                 }
             ) {

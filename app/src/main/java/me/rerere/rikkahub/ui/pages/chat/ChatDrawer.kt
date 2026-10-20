@@ -54,6 +54,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -81,6 +82,8 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ChartColumn
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Folder01
+import me.rerere.hugeicons.stroke.LeftToRightListBullet
+import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.LayoutLeft
 import me.rerere.hugeicons.stroke.Menu01
 import me.rerere.hugeicons.stroke.Camera01
@@ -130,17 +133,7 @@ fun ChatDrawerContent(
     vm: ChatVM,
     settings: Settings,
     current: Conversation,
-    collapsed: Boolean = false,
-    onToggleCollapsed: () -> Unit = {},
 ) {
-    if (collapsed) {
-        DrawerRailBar(
-            navController = navController,
-            onToggleCollapsed = onToggleCollapsed,
-        )
-        return
-    }
-
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val toaster = LocalToaster.current
@@ -199,6 +192,9 @@ fun ChatDrawerContent(
 
     // Menu popup 状态
     var showMenuPopup by remember { mutableStateOf(false) }
+
+    // 聊天记录列表折叠状态：折叠成一条横条，露出下方空间放入口
+    var listCollapsed by rememberSaveable { mutableStateOf(false) }
 
     ModalDrawerSheet(
         modifier = Modifier.width(300.dp)
@@ -309,43 +305,98 @@ fun ChatDrawerContent(
                 onDelete = { folderToDelete = it },
             )
 
-            ConversationList(
-                current = current,
-                conversations = conversations,
-                conversationJobs = conversationJobs.keys,
-                listState = conversationListState,
-                drawerItemAlpha = settings.displaySetting.drawerItemAlpha,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                onClick = {
-                    navigateToChatPage(navController, it.id)
-                },
-                onRegenerateTitle = {
-                    vm.generateTitle(it, true)
-                },
-                onDelete = {
-                    vm.deleteConversation(it)
-                    // Refresh the conversation list to immediately remove the deleted item
-                    // This fixes the issue where deleted conversations sometimes remain visible
-                    // until manually clicked (issue #747)
-                    conversations.refresh()
-                    if (it.id == current.id) {
-                        navigateToChatPage(navController)
-                    }
-                },
-                onPin = {
-                    vm.updatePinnedStatus(it)
-                },
-                onMoveToAssistant = {
-                    conversationToMove = it
-                    showMoveToAssistantSheet = true
-                },
-                onMoveToFolder = {
-                    conversationToMoveFolder = it
-                    showMoveToFolderSheet = true
-                }
+            // 折叠把手：折叠态是一条横条，展开态是细把手；长按切换
+            CollapsibleHandle(
+                collapsed = listCollapsed,
+                count = conversations.itemCount,
+                onToggle = { listCollapsed = !listCollapsed },
             )
+
+            if (!listCollapsed) {
+                ConversationList(
+                    current = current,
+                    conversations = conversations,
+                    conversationJobs = conversationJobs.keys,
+                    listState = conversationListState,
+                    drawerItemAlpha = settings.displaySetting.drawerItemAlpha,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    onClick = {
+                        navigateToChatPage(navController, it.id)
+                    },
+                    onRegenerateTitle = {
+                        vm.generateTitle(it, true)
+                    },
+                    onDelete = {
+                        vm.deleteConversation(it)
+                        // Refresh the conversation list to immediately remove the deleted item
+                        // This fixes the issue where deleted conversations sometimes remain visible
+                        // until manually clicked (issue #747)
+                        conversations.refresh()
+                        if (it.id == current.id) {
+                            navigateToChatPage(navController)
+                        }
+                    },
+                    onPin = {
+                        vm.updatePinnedStatus(it)
+                    },
+                    onMoveToAssistant = {
+                        conversationToMove = it
+                        showMoveToAssistantSheet = true
+                    },
+                    onMoveToFolder = {
+                        conversationToMoveFolder = it
+                        showMoveToFolderSheet = true
+                    }
+                )
+            } else {
+                // 折叠后空出来的地方：入口
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DrawerEntryRow(
+                        icon = HugeIcons.Camera01,
+                        label = "朋友圈",
+                        onClick = {
+                            navController.navigate(
+                                Screen.WebView(url = "http://106.53.181.56:18010/?k=yannian")
+                            )
+                        },
+                    )
+                    DrawerEntryRow(
+                        icon = HugeIcons.PencilEdit01,
+                        label = "每日任务",
+                        onClick = {
+                            navController.navigate(
+                                Screen.WebView(url = "http://106.53.181.56:3001/tasks/")
+                            )
+                        },
+                    )
+                    DrawerEntryRow(
+                        icon = HugeIcons.Message01,
+                        label = "留言板",
+                        onClick = {
+                            navController.navigate(
+                                Screen.WebView(url = "http://106.53.181.56:3001/board/")
+                            )
+                        },
+                    )
+                    DrawerEntryRow(
+                        icon = HugeIcons.Sparkles,
+                        label = "拾光·记忆",
+                        onClick = {
+                            navController.navigate(
+                                Screen.WebView(url = "http://106.53.181.56:3001/shiguang/")
+                            )
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+            }
 
             // 助手选择器
             AssistantPicker(
@@ -790,124 +841,115 @@ fun ChatDrawerContent(
 
 
 /**
- * 收起状态下的窄条（rail）。
- * 长按窄条本身 = 展开 / 折叠切换。
- * 下方排列跳转按钮（朋友圈 / 任务板 / 留言板），宽度与窄条一致。
+ * 聊天记录列表的折叠把手。
+ * 折叠态：一条横条，显示条数，长按展开。
+ * 展开态：一条细把手，长按折叠。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DrawerRailBar(
-    navController: Navigator,
-    onToggleCollapsed: () -> Unit,
+private fun CollapsibleHandle(
+    collapsed: Boolean,
+    count: Int,
+    onToggle: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
-    ModalDrawerSheet(
-        modifier = Modifier.width(72.dp),
-    ) {
-        Column(
+    val longPress = {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        onToggle()
+    }
+
+    if (collapsed) {
+        Surface(
             modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(vertical = 12.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
-            // 顶部：长按展开
-            Box(
+            Row(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggleCollapsed()
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .combinedClickable(onClick = {}, onLongClick = longPress)
+                    .padding(horizontal = 12.dp, vertical = 15.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(
-                    imageVector = HugeIcons.LayoutLeft,
-                    contentDescription = "长按展开聊天列表",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(24.dp),
+                    imageVector = HugeIcons.LeftToRightListBullet,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = if (count > 0) "聊天记录 · $count" else "聊天记录",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "长按展开",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            // 跳转按钮
-            RailButton(
-                icon = HugeIcons.Camera01,
-                label = "朋友圈",
-                onClick = { navController.navigate(Screen.WebView(url = "http://106.53.181.56:18010/?k=yannian")) },
-            )
-            RailButton(
-                icon = HugeIcons.PencilEdit01,
-                label = "任务板",
-                onClick = { navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/tasks/")) },
-            )
-            RailButton(
-                icon = HugeIcons.Message01,
-                label = "留言板",
-                onClick = { navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/board/")) },
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // 底部再放一个长按区，方便够得着
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(18.dp)
+                .combinedClickable(onClick = {}, onLongClick = longPress),
+            contentAlignment = Alignment.Center,
+        ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggleCollapsed()
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = HugeIcons.Menu01,
-                    contentDescription = "长按展开",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+                    .size(width = 34.dp, height = 3.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
         }
     }
 }
 
+/** 折叠后露出的入口行 */
 @Composable
-private fun RailButton(
+private fun DrawerEntryRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     onClick: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .size(width = 56.dp, height = 58.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = HugeIcons.ArrowRight01,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
