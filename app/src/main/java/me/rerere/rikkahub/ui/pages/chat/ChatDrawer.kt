@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -798,15 +801,13 @@ fun DrawerRailBar(
     onToggleCollapsed: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
-    Surface(
-        modifier = Modifier
-            .width(72.dp)
-            .fillMaxHeight(),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    ModalDrawerSheet(
+        modifier = Modifier.width(72.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(vertical = 12.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),

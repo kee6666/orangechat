@@ -237,15 +237,6 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
         }
 
         else -> {
-            // 常驻窄条：抽屉关着时也能看到，长按展开完整列表
-            Row(modifier = Modifier.fillMaxSize()) {
-                DrawerRailBar(
-                    navController = navController,
-                    onToggleCollapsed = {
-                        scope.launch { drawerState.open() }
-                    },
-                )
-                Box(modifier = Modifier.weight(1f)) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 drawerContent = {
@@ -281,8 +272,6 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
             }
             BackHandler(drawerState.isOpen) {
                 scope.launch { drawerState.close() }
-            }
-                }
             }
         }
     }
