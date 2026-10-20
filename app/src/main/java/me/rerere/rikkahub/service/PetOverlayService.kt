@@ -97,9 +97,15 @@ class PetOverlayService : Service() {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     private val PET_W get() = dp(126)
-    private val PET_H_SMALL get() = dp(60)
+    /**
+     * 窗口高度：必须能完整包住 112dp 宽的像素小人（42dp 高）+ 下方阴影 + 上面留一点呼吸。
+     * 之前写 60dp 太矮，SVG 被窗口顶边裁掉，拖动时 y 也被窗口边界卡死。
+     */
+    private val PET_H get() = dp(74)
     /** 小人在窗口里 112dp 宽，居中 */
     private val PET_CX get() = dp(63)
+    /** 小人头顶在窗口内的像素偏移（窗口底部对齐小人脚下） */
+    private val PET_TOP_IN_WIN get() = PET_H - dp(52)
     /** 气泡单独一个窗口：主窗口尺寸从此不再变化，气泡进出不会把它顶得上下弹 */
     private val BUBBLE_MAX_W get() = dp(150)
 
@@ -183,8 +189,9 @@ class PetOverlayService : Service() {
         val h = bv.measuredHeight
         val w = bv.measuredWidth
         if (h <= 0) return
+        // 窗口底部 = 小人脚下；小人头顶在窗口内 petsTop，气泡底边压到头顶往上 6dp
         blp.x = lp.x + PET_CX - w / 2
-        blp.y = baseY + dp(7) - h
+        blp.y = baseY + PET_TOP_IN_WIN - h - dp(4)
         runCatching { wm?.updateViewLayout(bv, blp) }
     }
 
@@ -200,7 +207,7 @@ class PetOverlayService : Service() {
             baseY = prefs?.getInt(KEY_Y, dp(300)) ?: dp(300)
             val lp = WindowManager.LayoutParams(
                 PET_W,
-                PET_H_SMALL,
+                PET_H,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -242,7 +249,7 @@ class PetOverlayService : Service() {
         val lp = winLp ?: return false
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                startX = lp.x; startY = lp.y; startBaseY = baseY
+                startX = lp.x; startBaseY = baseY
                 downX = ev.rawX; downY = ev.rawY
                 downAt = System.currentTimeMillis()
                 moved = false
