@@ -231,6 +231,30 @@ class MemoryBankService(
         }
     }
 
+    /**
+     * 保存一篇梦记（做梦整理后写下来的第一人称记录）
+     */
+    suspend fun saveDream(
+        content: String,
+        assistantId: String?,
+        dateGroup: String? = null,
+    ): MemoryBankEntity? = withContext(Dispatchers.IO) {
+        try {
+            val entity = MemoryBankEntity(
+                content = content,
+                type = "dream",
+                assistantId = assistantId,
+                dateGroup = dateGroup,
+                vectorStatus = "skipped"
+            )
+            val id = memoryBankDAO.insertMemory(entity).toInt()
+            entity.copy(id = id)
+        } catch (e: Exception) {
+            Log.e(TAG, "saveDream failed", e)
+            null
+        }
+    }
+
     // ==================== Helper Methods ====================
 
     private fun parseEmbedding(embeddingJson: String?): List<Float>? {

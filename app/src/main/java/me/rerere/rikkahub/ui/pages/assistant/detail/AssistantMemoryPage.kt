@@ -43,19 +43,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.widget.Toast
+import kotlinx.coroutines.launch
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.AssistantMemory
 import me.rerere.rikkahub.data.model.ExternalMemory
+import me.rerere.rikkahub.data.service.DreamService
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.RikkaConfirmDialog
@@ -129,6 +134,15 @@ private fun AssistantMemoryContent(
     }
     var pendingDeleteMemory by remember { mutableStateOf<AssistantMemory?>(null) }
     var showExternalMemoryPicker by remember { mutableStateOf(false) }
+
+    // 做梦
+    var dreamBusy by remember { mutableStateOf(false) }
+    val dreamScope = rememberCoroutineScope()
+    val dreamContext = LocalContext.current
+    var dreamHint by remember {
+        val info = DreamService.lastDreamInfo()
+        mutableStateOf(if (info.first.isBlank()) "还没梦过" else "${info.first} · ${info.second}")
+    }
 
     // 记忆对话框
     memoryDialogState.EditStateContent { memory, update ->
@@ -221,6 +235,55 @@ private fun AssistantMemoryContent(
                         },
                         enabled = assistant.enableMemory
                     )
+                }
+            )
+            item(
+                headlineContent = { Text("自动做梦") },
+                supportingContent = {
+                    Text(
+                        text = if (assistant.autoDream) {
+                            "聊完自己整理记忆：停下、攒够几轮、切走 App 都会梦一场"
+                        } else {
+                            "不自己动，只有你点「做一次」才整理"
+                        },
+                    )
+                },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.autoDream,
+                        onCheckedChange = {
+                            onUpdateAssistant(
+                                assistant.copy(
+                                    autoDream = it
+                                )
+                            )
+                        },
+                        enabled = assistant.enableMemory
+                    )
+                }
+            )
+            item(
+                headlineContent = { Text("梦记") },
+                supportingContent = {
+                    Text(text = if (dreamBusy) "正梦着…" else dreamHint)
+                },
+                trailingContent = {
+                    TextButton(
+                        onClick = {
+                            if (!dreamBusy) {
+                                dreamBusy = true
+                                dreamScope.launch {
+                                    val msg = DreamService.dreamNow(assistant.id)
+                                    dreamHint = msg
+                                    dreamBusy = false
+                                    Toast.makeText(dreamContext, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = !dreamBusy && assistant.enableMemory
+                    ) {
+                        Text("做一次")
+                    }
                 }
             )
             item(

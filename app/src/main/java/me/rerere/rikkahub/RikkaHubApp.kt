@@ -137,6 +137,13 @@ class RikkaHubApp : Application() {
             android.util.Log.e(TAG, "Failed to pre-warm ChatService singleton", e)
         }
 
+        // 做梦服务：注册前后台监听，切走 App 时把欠着的梦补上
+        runCatching {
+            me.rerere.rikkahub.data.service.DreamService.init(this)
+        }.onFailure { e ->
+            android.util.Log.e(TAG, "Failed to init DreamService", e)
+        }
+
         // set cursor window size to 32MB
         DatabaseUtil.setCursorWindowSize(32 * 1024 * 1024)
 

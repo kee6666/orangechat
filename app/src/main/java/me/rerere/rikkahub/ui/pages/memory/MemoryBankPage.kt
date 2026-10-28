@@ -338,7 +338,7 @@ private fun TypeFilterRow(
     selectedType: String,
     onTypeSelected: (String) -> Unit,
 ) {
-    val types = listOf("" to "总结视图", "phase_summary" to "阶段总结", "daily_summary" to "日记", "message" to "消息", "manual" to "手动")
+    val types = listOf("" to "总结视图", "dream" to "梦记", "phase_summary" to "阶段总结", "daily_summary" to "日记", "message" to "消息", "manual" to "手动")
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -384,6 +384,7 @@ private fun MemoryCard(
                             "message" -> MaterialTheme.colorScheme.primaryContainer
                             "phase_summary" -> MaterialTheme.colorScheme.secondaryContainer
                             "daily_summary" -> MaterialTheme.colorScheme.tertiaryContainer
+                            "dream" -> MaterialTheme.colorScheme.secondaryContainer
                             "manual" -> MaterialTheme.colorScheme.inversePrimary
                             else -> MaterialTheme.colorScheme.surfaceVariant
                         },
@@ -394,6 +395,7 @@ private fun MemoryCard(
                                 "message" -> "消息"
                                 "phase_summary" -> "阶段总结"
                                 "daily_summary" -> "日记"
+                                "dream" -> "梦记"
                                 "manual" -> "手动"
                                 else -> memory.type
                             },

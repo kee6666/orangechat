@@ -1164,6 +1164,13 @@ addAll(localTools.getTools(assistant.localTools, me.rerere.rikkahub.data.ai.tool
                 generateSuggestion(conversationId, finalConversation)
             }
 
+            // 做梦：记一笔待梦的轮数，攒够或空闲下来由 DreamService 自己收拾
+            runCatching {
+                me.rerere.rikkahub.data.service.DreamService.onAssistantReply(finalConversation, assistant)
+            }.onFailure { e ->
+                Log.w(TAG, "Failed to notify DreamService", e)
+            }
+
             // 保存 AI 回复到外置记忆库
             try {
                 val externalMemoryConfigs = settings.externalMemories.filter {
