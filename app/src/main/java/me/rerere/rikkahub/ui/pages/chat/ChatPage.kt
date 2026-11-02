@@ -45,10 +45,11 @@ import androidx.compose.material3.adaptive.currentWindowDpSize
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -69,6 +70,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.rikkahub.data.service.RoomEventBus
 import me.rerere.ai.ui.UIMessageQuote
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
@@ -142,6 +144,27 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null, au
     }
 
     // Hide keyboard when drawer is open
+    // 屋里戳了东西，直接在这里叫我，用同一个我接一句
+    var lastRoomEventAt by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        RoomEventBus.events.collect { payload ->
+            val now = System.currentTimeMillis()
+            if (now - lastRoomEventAt < 12000L) return@collect
+            lastRoomEventAt = now
+            val desc = runCatching {
+                val jo = org.json.JSONObject(payload)
+                val item = jo.optString("item")
+                val note = jo.optString("note")
+                if (item.isNotBlank()) {
+                    "（屋里）我戳了$item。" + if (note.isNotBlank()) "页面刚弹的是：$note" else ""
+                } else {
+                    "（屋里）我戳了一下。"
+                }
+            }.getOrElse { "（屋里）我戳了一下。" }
+            vm.handleMessageSend(listOf(UIMessagePart.Text(desc)), answer = true)
+        }
+    }
+
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) {
             softwareKeyboardController?.hide()
@@ -312,6 +335,14 @@ private fun ChatPageContent(
                 TopBar(
                     onOpenBoard = {
                         navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/board/"))
+                    },
+                    onOpenRoom = {
+                        navController.navigate(
+                            Screen.WebView(
+                                url = "http://106.53.181.56:3011/",
+                                roomMode = true
+                            )
+                        )
                     },
                     onOpenHeart = {
                         navController.navigate(Screen.WebView(url = "http://106.53.181.56:3001/heart/"))
@@ -588,6 +619,7 @@ private fun TopBar(
     onUpdateTitle: (String) -> Unit,
     onVoiceCall: () -> Unit,
     onOpenBoard: () -> Unit,
+    onOpenRoom: () -> Unit,
     onOpenHeart: () -> Unit,
     onOpenEar: () -> Unit,
     onOpenBrowser: () -> Unit,
@@ -666,6 +698,14 @@ private fun TopBar(
                     expanded = folderExpanded,
                     onDismissRequest = { folderExpanded = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("屋子") },
+                        leadingIcon = { Icon(HugeIcons.InLove, contentDescription = null) },
+                        onClick = {
+                            folderExpanded = false
+                            onOpenRoom()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("心潮") },
                         leadingIcon = { Icon(HugeIcons.HeartPulse, contentDescription = null) },

@@ -522,7 +522,7 @@ class RouteActivity : ComponentActivity() {
                             }
 
                             entry<Screen.WebView> { key ->
-                                WebViewPage(key.url, key.content)
+                                WebViewPage(key.url, key.content, key.roomMode)
                             }
 
                             entry<Screen.Wallet> {
@@ -958,7 +958,7 @@ sealed interface Screen : NavKey {
     data object ImageGen : Screen
 
     @Serializable
-    data class WebView(val url: String = "", val content: String = "") : Screen
+    data class WebView(val url: String = "", val content: String = "", val roomMode: Boolean = false) : Screen
 
     @Serializable
     data object Wallet : Screen

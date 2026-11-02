@@ -70,7 +70,7 @@ import me.rerere.rikkahub.utils.base64Decode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WebViewPage(url: String, content: String) {
+fun WebViewPage(url: String, content: String, roomMode: Boolean = false) {
     val state = if (url.isNotEmpty()) {
         rememberWebViewState(
             url = url,
@@ -234,6 +234,16 @@ fun WebViewPage(url: String, content: String) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(it),
+            onCreated = { wv ->
+                if (roomMode) {
+                    wv.addJavascriptInterface(object {
+                        @android.webkit.JavascriptInterface
+                        fun onEvent(json: String) {
+                            me.rerere.rikkahub.data.service.RoomEventBus.push(json)
+                        }
+                    }, "AndroidRoom")
+                }
+            },
         )
     }
 
