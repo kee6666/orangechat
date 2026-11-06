@@ -49,6 +49,7 @@ import me.rerere.search.SearchService
 import me.rerere.rikkahub.data.sync.S3Sync
 import okhttp3.Dispatcher
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.dsl.module
@@ -208,6 +209,10 @@ val dataSourceModule = module {
 
         OkHttpClient.Builder()
             .dispatcher(dispatcher)
+            // 空闲连接寿命压到 45s, 比多数网关/CDN 的 keepalive(60s) 更短。
+            // 原本默认是 5 分钟, 那些早就被对端悄悄关掉的死连接会在池子里躺很久,
+            // 下次复用时才被发现 = HTTP/2 直接 RST_STREAM(PROTOCOL_ERROR)。
+            .connectionPool(ConnectionPool(8, 45, TimeUnit.SECONDS))
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.MINUTES)
             .writeTimeout(120, TimeUnit.SECONDS)

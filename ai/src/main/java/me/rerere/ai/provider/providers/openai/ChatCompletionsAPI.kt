@@ -352,7 +352,13 @@ class ChatCompletionsAPI(
                 Log.e(TAG, failureMsg)
                 Logging.log(TAG, failureMsg)
 
-                val bodyRaw = response?.body?.stringSafe()
+                // 流式链路被中间网关/服务端 RST_STREAM 掐断是最常见的中断来源,
+                // HTTP/2 下表现为 StreamResetException 且 message 带 PROTOCOL_ERROR。
+                // 这不是"请求失败", 是"生成被截断", 要当软失败处理:
+                // 已经吐出去的内容必须留在界面上, 而不是整条流炸掉、让用户看到一堆英文报错。
+                val streamReset = isStreamResetLike(t)
+
+                val bodyRaw = if (streamReset) null else response?.body?.stringSafe()
                 // 记录上游返回的原始响应体, 便于排查 400/500 等错误的具体原因
                 if (!bodyRaw.isNullOrBlank()) {
                     val bodyMsg = "onFailure: raw response body (HTTP ${response?.code}): $bodyRaw"
@@ -373,7 +379,14 @@ class ChatCompletionsAPI(
                     Logging.log(TAG, parseMsg)
                     exception = e
                 } finally {
-                    close(exception)
+                    if (streamReset) {
+                        // 截断而非失败: 不抛异常, 正常收尾, 让上层保留已生成的内容。
+                        Log.w(TAG, "onFailure: stream reset, 按截断处理, 保留已生成内容")
+                        Logging.log(TAG, "onFailure: stream reset handled as truncation")
+                        close()
+                    } else {
+                        close(exception)
+                    }
                 }
             }
 
@@ -938,6 +951,27 @@ class ChatCompletionsAPI(
      * 注意: 这里解析的是一次性拿到的整个响应体(generateText 非 stream 场景, 但服务端
      * 仍返回了 SSE), 不是 okHttp EventSource 拼好的单条事件, 所以需要自己做事件边界识别。
      */
+    /**
+     * 判断这个异常是不是"连接被中途重置/掐断"这一类。
+     * 这类错误不代表请求本身有问题, 通常换连接就能继续, 属于可恢复的截断。
+     */
+    private fun isStreamResetLike(t: Throwable?): Boolean {
+        var cur: Throwable? = t
+        var depth = 0
+        while (cur != null && depth < 6) {
+            val name = cur.javaClass.name
+            val msg = cur.message ?: ""
+            if (name.contains("StreamResetException")) return true
+            if (msg.contains("PROTOCOL_ERROR", ignoreCase = true)) return true
+            if (msg.contains("stream was reset", ignoreCase = true)) return true
+            if (msg.contains("RST_STREAM", ignoreCase = true)) return true
+            if (msg == "canceled" || msg.contains("Canceled", ignoreCase = true)) return false
+            cur = cur.cause
+            depth++
+        }
+        return false
+    }
+
     private fun parseSseEvents(body: String): List<String> {
         val events = mutableListOf<String>()
         val dataLines = mutableListOf<String>()

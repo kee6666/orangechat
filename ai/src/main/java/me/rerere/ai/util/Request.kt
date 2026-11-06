@@ -45,9 +45,15 @@ fun Request.Builder.configureReferHeaders(url: String): Request.Builder {
 }
 
 fun ResponseBody.stringSafe(): String? {
-    return when (this) {
-        is RealResponseBody -> string()
-        else -> null
+    return try {
+        when (this) {
+            is RealResponseBody -> string()
+            else -> null
+        }
+    } catch (e: Throwable) {
+        // 流已被对端重置(RST_STREAM / PROTOCOL_ERROR)或已关闭时, string() 会再抛一次,
+        // 这层兜底是为了不让"读错误体"这个动作把真正的异常盖掉。
+        null
     }
 }
 
