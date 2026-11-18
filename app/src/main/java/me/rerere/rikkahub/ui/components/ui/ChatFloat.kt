@@ -79,6 +79,8 @@ fun ChatFloatBubble() {
             visible = true
             expanded = false
         } else {
+            // 写完别立刻消失，留 25 秒，让她切出去还看得见
+            kotlinx.coroutines.delay(25_000)
             visible = false
             expanded = false
             previewState.value = ""
@@ -97,6 +99,7 @@ fun ChatFloatBubble() {
     FloatingWindow(
         tag = "chat_float_bubble",
         visibility = visible && !expanded,
+        appLevel = true,
     ) {
         Surface(
             shape = CircleShape,
@@ -119,6 +122,7 @@ fun ChatFloatBubble() {
     FloatingWindow(
         tag = "chat_float_panel",
         visibility = visible && expanded,
+        appLevel = true,
     ) {
         ChatFloatPanel(
             title = titleState.value,

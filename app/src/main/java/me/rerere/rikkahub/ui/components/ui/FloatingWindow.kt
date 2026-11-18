@@ -15,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
 import com.petterp.floatingx.FloatingX
 import com.petterp.floatingx.assist.FxGravity
 import com.petterp.floatingx.listener.control.IFxAppControl
@@ -24,9 +26,12 @@ import me.rerere.rikkahub.ui.theme.RikkahubTheme
 fun FloatingWindow(
     tag: String,
     visibility: Boolean = true,
+    // true 时挂到 Application 上，切到别的 App 也不消失（需要「显示在其他应用上层」权限）
+    appLevel: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    val windowContext = if (appLevel) context.applicationContext else context
     var window: IFxAppControl? by remember { mutableStateOf(null) }
 
     LaunchedEffect(visibility) {
@@ -37,14 +42,16 @@ fun FloatingWindow(
         }
     }
 
-    DisposableEffect(context) {
+    DisposableEffect(windowContext) {
         window = FloatingX.install {
             setTag(tag)
-            setContext(context)
+            setContext(windowContext)
             setGravity(FxGravity.LEFT_OR_BOTTOM)
             setOffsetXY(20f, -20f)
             setEnableAnimation(true)
-            setLayoutView(ComposeView(context).apply {
+            setLayoutView(ComposeView(windowContext).apply {
+                // 浮窗的 View 不在 Activity 的视图树里，要自己给个 LifecycleOwner，否则 Compose 起不来
+                setViewTreeLifecycleOwner(ProcessLifecycleOwner.get())
                 setContent {
                     RikkahubTheme {
                         content()
