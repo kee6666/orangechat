@@ -16,6 +16,7 @@ import android.widget.Toast
 
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import me.rerere.rikkahub.ui.components.ui.ChatFloatBubble
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionLayout
@@ -226,6 +227,7 @@ class RouteActivity : ComponentActivity() {
         setContent {
             RikkahubTheme {
                 AppRoutes()
+                ChatFloatBubble()
             }
         }
     }
