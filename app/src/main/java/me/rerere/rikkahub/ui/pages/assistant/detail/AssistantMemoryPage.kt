@@ -238,6 +238,30 @@ private fun AssistantMemoryContent(
                 }
             )
             item(
+                headlineContent = { Text("自动压缩上下文") },
+                supportingContent = {
+                    Text(
+                        text = if (assistant.autoCompress) {
+                            "聊太长时我把老历史压成一份摘要接着聊，不删消息，续得上"
+                        } else {
+                            "不自动压，只在你要的时候手动压缩"
+                        },
+                    )
+                },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.autoCompress,
+                        onCheckedChange = {
+                            onUpdateAssistant(
+                                assistant.copy(
+                                    autoCompress = it
+                                )
+                            )
+                        }
+                    )
+                }
+            )
+            item(
                 headlineContent = { Text("自动做梦") },
                 supportingContent = {
                     Text(

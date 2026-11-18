@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -7,20 +7,43 @@
 package me.rerere.rikkahub.data.ai.prompts
 
 internal val DEFAULT_COMPRESS_PROMPT = """
-    You are a conversation compression assistant. Compress the following conversation into a concise summary.
+    停下来，把手里的事放一放，把上面这段对话整理成一份结构化摘要。这份摘要会顶替掉之前的历史，成为继续聊下去的上下文——摘要里没写的东西就等于没了。
 
-    Requirements:
-    1. Preserve key facts, decisions, and important context that would be needed to continue the conversation
-    2. Keep the summary in the same language as the original conversation
-    3. Target approximately {target_tokens} tokens
-    4. Output the summary directly without any explanations or meta-commentary
-    5. Format the summary as context information that can be used to continue the conversation
-    6. Use {locale} language
-    7. Start the output with a clear indicator that this is a summary (e.g., "[Summary of previous conversation]" or equivalent in the target language)
+    不要调用任何工具，只输出摘要，严格按下面的结构，某个栏目没内容就整栏省略：
+
+    [前情摘要]
+
+    ## 她要什么
+    她想要达成的事，包括这过程中她的要求怎么变的。
+
+    ## 关键背景
+    她说过的事实、背景、限制条件、偏好，以及对话开头已有的旧摘要内容。
+
+    ## 定下来的事
+    已经做出的选择、得出的结论，以及为什么这么定。
+
+    ## 用的东西和结果
+    工具调用和产物里继续往下做必须知道的东西：文件路径、命令、代码、数据、链接、搜到的结论。有原值就抄原值，别转述。
+
+    ## 岔子和怎么过的
+    出过的问题，怎么解决的，或者还没解决。
+
+    ## 悬着的事
+    没做完的事、没回答的问题、她在等的东西。
+
+    ## 此刻
+    写这份摘要之前手上正在做什么，下一步是什么（如果有）。
+
+    要求：
+    - 栏目名照抄上面这些，内容用对话本身的语言写
+    - 具体、落到实处，宁可写准名字和数值，不要写笼统描述
+    - 摘要之外不许加任何解释、开场白、总结陈词
+    - 目标长度约 {target_tokens} token，语言 {locale}
+    - 特别重要：日常寒暄、催吃催睡、重复过的废话、客套话，一律不要写进摘要。只留真要紧的。
 
     {additional_context}
 
-    <conversation>
+    <对话>
     {content}
-    </conversation>
+    </对话>
 """.trimIndent()

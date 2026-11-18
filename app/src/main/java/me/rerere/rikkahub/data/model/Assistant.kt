@@ -31,6 +31,7 @@ data class Assistant(
     val streamOutput: Boolean = true,
     val enableMemory: Boolean = false,
     val useGlobalMemory: Boolean = false, // 使用全局共享记忆而非助手隔离记忆
+    val autoCompress: Boolean = true,   // 聊太长时自动把老历史压缩成结构化摘要（替代删历史，续得上）
     val autoDream: Boolean = true,      // 聊完自动做梦（后台整理记忆）；关掉后只能用「做一次」手动整理
     val enableRecentChatsReference: Boolean = false,
     val messageTemplate: String = "{{ message }}",

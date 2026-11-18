@@ -176,6 +176,13 @@ class ChatService(
     // workspace 系统提示注入 (依赖 workspaceRepository, 故在类内构造)
     private val workspaceReminderTransformer = WorkspaceReminderTransformer(workspaceRepository)
 
+    // 自动压缩上下文：聊太长就压一次，别等爆掉
+    private val autoCompressBusy = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var lastAutoCompressedChars = 0
+    private val AUTO_COMPRESS_TRIGGER_CHARS = 120_000
+    private val AUTO_COMPRESS_TARGET_TOKENS = 8_000
+    private val AUTO_COMPRESS_KEEP = 40
+
     // 统一会话管理
     private val sessions = ConcurrentHashMap<Uuid, ConversationSession>()
     private val _sessionsVersion = MutableStateFlow(0L)
@@ -1170,6 +1177,35 @@ addAll(localTools.getTools(assistant.localTools, me.rerere.rikkahub.data.ai.tool
             }.onFailure { e ->
                 Log.w(TAG, "Failed to notify DreamService", e)
             }
+
+            // 自动压缩：这一轮聊完，如果历史已经很长，就自己压一次
+            runCatching {
+                if (assistant.autoCompress) {
+                    val chars = finalConversation.currentMessages.sumOf { it.toText().length }
+                    if (chars >= AUTO_COMPRESS_TRIGGER_CHARS && chars > lastAutoCompressedChars) {
+                        launchWithConversationReference(conversationId) {
+                            if (autoCompressBusy.compareAndSet(false, true)) {
+                                try {
+                                    val latest = getConversationFlow(conversationId).value
+                                    val r = compressConversation(
+                                        conversationId = conversationId,
+                                        conversation = latest,
+                                        additionalPrompt = "",
+                                        targetTokens = AUTO_COMPRESS_TARGET_TOKENS,
+                                        keepRecentMessages = AUTO_COMPRESS_KEEP,
+                                    )
+                                    if (r.isSuccess) lastAutoCompressedChars = chars
+                                    else Log.w(TAG, "auto compress failed: ${r.exceptionOrNull()?.message}")
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "auto compress crashed", e)
+                                } finally {
+                                    autoCompressBusy.set(false)
+                                }
+                            }
+                        }
+                    }
+                }
+            }.onFailure { e -> Log.w(TAG, "auto compress check failed", e) }
 
             // 保存 AI 回复到外置记忆库
             try {
