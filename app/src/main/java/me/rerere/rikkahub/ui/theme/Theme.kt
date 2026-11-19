@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 橘瓣 OrangeChat
  * 衍生自 RikkaHub (https://github.com/rikkahub/rikkahub)，原作者 RE
  * 本项目基于 GNU AGPL v3 开源，详见根目录 LICENSE 文件
@@ -137,7 +137,10 @@ fun RikkahubTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
+            // 浮窗/桌宠这类挂在 Application 上的 ComposeView，context 不是 Activity，
+            // 强转会直接崩。拿不到 Activity 就跳过状态栏适配。
+            val activity = view.context as? Activity ?: return@SideEffect
+            val window = activity.window
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !darkTheme
                 isAppearanceLightNavigationBars = !darkTheme
