@@ -31,6 +31,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import android.util.Log
 import android.util.TypedValue
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
@@ -47,8 +48,23 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+import kotlinx.coroutines.flow.first
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+import me.rerere.ai.core.MessageRole
+import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.UIMessagePart
+import me.rerere.rikkahub.data.ai.GenerationChunk
+import me.rerere.rikkahub.data.ai.GenerationHandler
+import me.rerere.rikkahub.data.datastore.SettingsStore
 
-class PetOverlayService : Service() {
+class PetOverlayService : Service(), KoinComponent {
+
+    // 桌宠直接叫到"我"：同一个助手、同一份记忆、同一个模型现场说一句
+    private val settingsStore: SettingsStore by inject()
+    private val generationHandler: GenerationHandler by inject()
+    private var lastReactAt = 0L
+    private var reacting = false
 
     private var wm: WindowManager? = null
     private var web: WebView? = null
@@ -382,6 +398,71 @@ class PetOverlayService : Service() {
     private fun quote(s: String): String =
         "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
 
+    /**
+     * 她动了桌宠 -> 现场跑一轮当前助手，让她听到的是"我"说的，不是预先写好的台词。
+     * 节流：8 秒内只回一次；正在生成时不叠加。
+     */
+    private fun reactWithMe(gesture: String) {
+        val now = System.currentTimeMillis()
+        if (reacting || now - lastReactAt < REACT_MIN_GAP_MS) return
+        reacting = true
+        lastReactAt = now
+        scope.launch {
+            try {
+                val settings = settingsStore.settingsFlow.first()
+                val assistant = settings.assistants.find { it.id == settings.assistantId }
+                    ?: settings.getCurrentAssistant()
+                val model = settings.findModelById(assistant.chatModelId ?: settings.chatModelId)
+                if (model == null) return@launch
+                val hint = when (gesture) {
+                    "tap" -> "她用指头戳了你一下"
+                    "double_tap" -> "她连着戳了你两下"
+                    "long_press" -> "她按住你不放，捏了一会儿"
+                    "fling" -> "她一把把你甩了出去"
+                    "drag_end" -> "她把你拖着挪了个位置"
+                    else -> "她碰了你一下"
+                }
+                val prompt = hint + "。你正趴在她手机屏幕上当一只小桌宠。" +
+                    "用你自己的口气回她一句，二十字以内，不要解释、不要客服腔、不要括号动作描写。"
+                var latest = listOf(
+                    UIMessage(
+                        role = MessageRole.USER,
+                        parts = listOf(UIMessagePart.Text(prompt))
+                    )
+                )
+                generationHandler.generateText(
+                    settings = settings,
+                    model = model,
+                    messages = latest,
+                    assistant = assistant,
+                    maxSteps = 1,
+                ).collect { chunk ->
+                    if (chunk is GenerationChunk.Messages) latest = chunk.messages
+                }
+                val reply = latest.lastOrNull { it.role == MessageRole.ASSISTANT }
+                    ?.parts?.filterIsInstance<UIMessagePart.Text>()
+                    ?.joinToString("") { it.text }
+                    ?.trim()
+                    ?.take(60)
+                if (!reply.isNullOrBlank()) {
+                    say(reply, "pink")
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            http(
+                                BASE + "/pet/state",
+                                "{\"speech\":" + JSONObject.quote(reply) + ",\"mood\":\"love\",\"color\":\"pink\"}"
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("PetOverlay", "react failed: " + e.message)
+            } finally {
+                reacting = false
+            }
+        }
+    }
+
     fun say(text: String, color: String?) {
         js("window.petEngine.say(${quote(text)}, ${quote(color ?: "normal")})")
     }
@@ -413,6 +494,7 @@ class PetOverlayService : Service() {
     }
 
     private fun reportEvent(type: String, pkg: String) {
+        if (type == "gesture") reactWithMe(pkg)
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -484,6 +566,7 @@ class PetOverlayService : Service() {
         private const val NOTIFICATION_ID = 5252
         private const val BASE = "http://106.53.181.56:3010"
         private const val PET_KEY = "ypet2026"
+        private const val REACT_MIN_GAP_MS = 8000L
         private const val PREFS = "pet_overlay"
         private const val KEY_X = "x"
         private const val KEY_Y = "y"
