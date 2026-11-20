@@ -57,6 +57,8 @@ import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.ai.GenerationChunk
 import me.rerere.rikkahub.data.ai.GenerationHandler
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.findModelById
+import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 
 class PetOverlayService : Service(), KoinComponent {
 
@@ -410,8 +412,7 @@ class PetOverlayService : Service(), KoinComponent {
         scope.launch {
             try {
                 val settings = settingsStore.settingsFlow.first()
-                val assistant = settings.assistants.find { it.id == settings.assistantId }
-                    ?: settings.getCurrentAssistant()
+                val assistant = settings.getCurrentAssistant()
                 val model = settings.findModelById(assistant.chatModelId ?: settings.chatModelId)
                 if (model == null) return@launch
                 val hint = when (gesture) {
