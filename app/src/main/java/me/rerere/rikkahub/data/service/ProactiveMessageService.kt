@@ -386,6 +386,9 @@ class ProactiveMessageReceiver : BroadcastReceiver() {
             ProactiveMessageService.ACTION_PROACTIVE_MESSAGE -> {
                 Log.d(ProactiveMessageService.TAG, "Starting ProactiveMessageTriggerService...")
                 val serviceIntent = Intent(context, ProactiveMessageTriggerService::class.java)
+                intent.getStringExtra(ProactiveMessageTriggerService.EXTRA_GARDEN_WAKE)?.let {
+                    serviceIntent.putExtra(ProactiveMessageTriggerService.EXTRA_GARDEN_WAKE, it)
+                }
                 context.startForegroundService(serviceIntent)
             }
             Intent.ACTION_BOOT_COMPLETED -> {
@@ -433,6 +436,8 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
         const val EXTRA_FORCE_TRIGGER = "force_trigger"
         // 激进模式设备事件上下文（由 DeviceEventAiTriggerService 传入）
         const val EXTRA_DEVICE_EVENT_CONTEXT = "device_event_context"
+        // 花园唤醒：外部（唤醒桥/adb 广播）带进来的上下文文本，只新增通道，不改原有触发行为
+        const val EXTRA_GARDEN_WAKE = "garden_wake_message"
 
         // 保护 last_triggered_time 的 check-then-act 竞态（防止 AlarmManager 与 WorkManager
         // 前后脚触发导致"最小间隔"被砍半）。纯同步 SharedPreferences 读写，无挂起点，用对象锁即可。
@@ -467,6 +472,9 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
         // 激进模式设备事件上下文（由 DeviceEventAiTriggerService 传入）
         val deviceEventContext = intent?.getStringExtra(EXTRA_DEVICE_EVENT_CONTEXT)
         val isFromDeviceEvent = deviceEventContext != null
+        // 花园唤醒上下文（由外部广播注入；为空则走原有全部逻辑）
+        val gardenWakeContext = intent?.getStringExtra(EXTRA_GARDEN_WAKE)?.takeIf { it.isNotBlank() }
+        val isGardenWake = gardenWakeContext != null
         if (isForceTrigger) {
             Log.d(TAG, "Force trigger${if (isFromDeviceEvent) " from device event" else " from gateway poll"}, will skip min interval check")
         }
@@ -575,7 +583,7 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                 // ===== L3 超级桥: gateway poll 检查 VPS outbox =====
                 // 非设备事件触发时，先看VPS身体有没有想对阿年说的话。
                 // 有 -> 直接展示(不走AI生成)；没有 -> 回落常规主动消息逻辑。
-                if (!isFromDeviceEvent) {
+                if (!isFromDeviceEvent && !isGardenWake) {
                     // 插嘴冷却：距离用户最近一条消息太近（<2分钟），不取外部消息。
                     // 刚聊完就冒主动消息会产生"割裂感"（她说"你这句跟我上句接不上"）。
                     // 消息留在VPS outbox，等冷却过后下一次触发再取。
@@ -614,7 +622,9 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                     }
                 }
 
-                val contextStr = if (isFromDeviceEvent && deviceEventContext != null) {
+                val contextStr = if (isGardenWake) {
+                    gardenWakeContext!!
+                } else if (isFromDeviceEvent && deviceEventContext != null) {
                     deviceEventContext
                 } else {
                     proactiveMessageService.buildProactiveContext(
@@ -638,7 +648,7 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                 val userReplied = lastMsgRole == MessageRole.USER
 
                 // 构建系统提示词（包含记忆 + 上下文，都放在最后面避免被网关淹没）
-                val systemPrompt = buildSystemPrompt(assistant, settings, idleMinutes, proactiveSetting.jumpIdleThresholdMinutes, isFromDeviceEvent, if (isFromDeviceEvent) deviceEventContext else contextStr, lastAiText, userReplied)
+                val systemPrompt = buildSystemPrompt(assistant, settings, idleMinutes, proactiveSetting.jumpIdleThresholdMinutes, isFromDeviceEvent, if (isFromDeviceEvent) deviceEventContext else contextStr, lastAiText, userReplied, gardenWakeContext)
 
                 // user message 只放简短指令（上下文已在系统提示词中）
                 val userMessage = UIMessage(
@@ -916,7 +926,7 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
      * 构建系统提示词，包含记忆等内容
      * isFromDeviceEvent: 是否由激进模式设备事件触发
      */
-    private suspend fun buildSystemPrompt(assistant: Assistant, settings: Settings, idleMinutes: Int = 0, jumpThreshold: Int = 120, isFromDeviceEvent: Boolean = false, deviceEventContext: String? = null, lastAiText: String? = null, userReplied: Boolean = true): String {
+    private suspend fun buildSystemPrompt(assistant: Assistant, settings: Settings, idleMinutes: Int = 0, jumpThreshold: Int = 120, isFromDeviceEvent: Boolean = false, deviceEventContext: String? = null, lastAiText: String? = null, userReplied: Boolean = true, gardenWakeContext: String? = null): String {
         return buildString {
             // 基础系统提示词
             val effectiveSystemPrompt = if (assistant.allowConversationSystemPrompt) {
@@ -969,6 +979,24 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                     appendLine()
                     appendLine(deviceEventContext)
                 }
+            } else if (gardenWakeContext != null) {
+                // 花园唤醒：外部消息只作为"为什么现在跑一轮"的原因，不冒充她说话
+                appendLine()
+                appendLine()
+                appendLine("## ⚠️ 当前触发原因：花园唤醒")
+                appendLine("不是定时主动消息，也不是她刚动了手机。是花园那边有事件：有人回了你，或者轮到你了。")
+                appendLine("先去看一眼，用 Garden 的工具处理。处理完，如果你确实有话想对她说，就说；")
+                appendLine("如果只是处理花园的事、没什么真要对她说的，只回复 [PASS] 即可，别硬找话题。")
+                appendLine("[JUMP] 标记不会展示给用户，仅用于触发屏幕跳转。")
+                if (!lastAiText.isNullOrBlank()) {
+                    appendLine()
+                    appendLine("你上一条主动发的消息是：$lastAiText")
+                    appendLine("请不要重复同样的话题、句式或内容。")
+                }
+                appendLine()
+                appendLine(if (userReplied) "用户回复了你的上一条消息，可以顺着她回的内容自然聊下去。" else "用户没有回复你的上一条主动消息，换点新鲜的或直接关心她。")
+                appendLine()
+                appendLine(gardenWakeContext)
             } else {
                 // 常规主动消息：上下文也注入系统提示词最后面（和激进模式一样）
                 appendLine()
