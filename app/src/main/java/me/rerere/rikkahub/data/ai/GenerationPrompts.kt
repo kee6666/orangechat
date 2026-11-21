@@ -22,8 +22,24 @@ internal fun buildMemoryPrompt(memories: List<AssistantMemory>) =
         appendLine()
         append("These are memories stored via the memory_tool that you can reference in future conversations.")
         appendLine()
+        // 固定顺序（id 升序）+ 字数封顶，让 system 前缀稳定、可被上游缓存
+        val ordered = memories.sortedBy { it.id }
+        val picked = ArrayList<AssistantMemory>()
+        var used = 0
+        for (m in ordered) {
+            if (used + m.content.length > MEMORY_PROMPT_CHAR_LIMIT) break
+            used += m.content.length
+            picked.add(m)
+        }
+        // 最近 3 条补进来，保证今年的事不被截掉
+        memories.sortedByDescending { it.id }.take(3).forEach { m ->
+            if (picked.none { it.id == m.id }) {
+                used += m.content.length
+                picked.add(m)
+            }
+        }
         val json = buildJsonArray {
-            memories.forEach { memory ->
+            picked.forEach { memory ->
                 add(buildJsonObject {
                     put("id", memory.id)
                     put("content", memory.content)
@@ -33,6 +49,8 @@ internal fun buildMemoryPrompt(memories: List<AssistantMemory>) =
         append(JsonInstantPretty.encodeToString(json))
         appendLine()
     }
+
+private const val MEMORY_PROMPT_CHAR_LIMIT = 2600
 
 internal suspend fun buildRecentChatsPrompt(
     assistant: Assistant,
