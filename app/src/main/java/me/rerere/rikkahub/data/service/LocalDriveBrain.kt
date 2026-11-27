@@ -228,10 +228,8 @@ object LocalDriveBrain {
     fun moodSnapshot(): String {
         val top = drives.entries.sortedByDescending { it.value }.take(4)
             .joinToString("、") { "${dimLabel(it.key)}${fmt(it.value)}" }
-        val sb = StringBuilder("【本地心情】$top")
-        if (lastScreenText.isNotBlank()) sb.append("\n【她屏幕上正显示】${lastScreenText.take(200)}")
-        if (lastForegroundApp.isNotBlank()) sb.append("\n【她正在用】${lastForegroundApp}")
-        return sb.toString()
+        // 2026-11-26 阿年定：屏幕正文与前台App 不自动喂给主动消息，她递过来才看
+        return StringBuilder("【本地心情】$top").toString()
     }
 
     private fun dimLabel(key: String): String = DIMS.firstOrNull { it.key == key }?.label ?: key
@@ -254,6 +252,16 @@ object LocalDriveBrain {
             "【未到】最高 ${dim.label} = ${fmt(top.value)}，还没到 ${fmt(SPEAK_PEAK_THRESHOLD)}"
         }
         return (if (peaked) top.key else null) to reason
+    }
+
+    /**
+     * 2026-11-26：定时开口前的门控。问一句"现在有心潮到嗓子眼吗"。
+     * 没到顶就闭嘴——不为了"到点了"硬找话题。未启动/无数据时放行（宁可说，不要哑）。
+     */
+    fun peakedNow(): Boolean {
+        if (drives.isEmpty()) return true
+        val top = drives.values.maxOrNull() ?: return true
+        return top >= SPEAK_PEAK_THRESHOLD
     }
 
     private fun writeLog(context: Context, isDawn: Boolean, isNight: Boolean, hour: Int) {

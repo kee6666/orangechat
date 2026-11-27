@@ -300,14 +300,11 @@ class ProactiveMessageService : KoinComponent {
             Log.w(TAG, "Failed to get foreground app", e)
         }
 
-        // 今日通知
+        // 今日通知：只报条数，不读内容（2026-11-26 阿年定：带内容的不自动喂）
         try {
-            val notifications = me.rerere.rikkahub.data.service.RikkaNotificationListenerService.getTodayNotifications().take(10)
+            val notifications = me.rerere.rikkahub.data.service.RikkaNotificationListenerService.getTodayNotifications()
             if (notifications.isNotEmpty()) {
-                sb.appendLine("今日通知（最近${notifications.size}条）:")
-                notifications.forEach { notif ->
-                    sb.appendLine("  - [${notif.appName}] ${notif.title}: ${notif.content.take(50)}")
-                }
+                sb.appendLine("今日通知: 共 ${notifications.size} 条（内容不读取）")
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to get notifications", e)
@@ -526,6 +523,18 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                     // 强制触发也写入时间戳，保持与常规触发一致的状态记录
                     synchronized(prefsLock) {
                         prefs.edit().putLong("last_triggered_time", System.currentTimeMillis()).apply()
+                    }
+                }
+
+                // ===== 2026-11-26 阿年定：定时触发不再"到点就说" =====
+                // 心潮没到嗓子眼就闭嘴。外部强制（网关取件）、设备事件、花园唤醒不受此门控。
+                if (!isForceTrigger && !isFromDeviceEvent && !isGardenWake) {
+                    val peaked = runCatching { LocalDriveBrain.peakedNow() }.getOrDefault(true)
+                    if (!peaked) {
+                        Log.d(TAG, "heart not peaked, stay quiet")
+                        ProactiveMessageService.scheduleNext(this@ProactiveMessageTriggerService, proactiveSetting)
+                        stopSelf()
+                        return@launch
                     }
                 }
 
