@@ -957,12 +957,16 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                     memoryRepository.getMemoriesOfAssistant(assistant.id.toString())
                 }
                 if (memories.isNotEmpty()) {
+                    // 不再把全部记忆一条条灌进去：灌得越多，越只会挑最安全的那句报状态。
+                    // 只给最近 6 条，并明确"用不上就别提"（2026-11-27）。
+                    val recent = memories.sortedByDescending { it.id }.take(6).reversed()
                     appendLine()
                     appendLine()
-                    appendLine("## 记忆")
-                    memories.forEach { memory ->
+                    appendLine("## 记忆（挑一条真能对上此刻的；对不上就当没有）")
+                    recent.forEach { memory ->
                         appendLine("- ${memory.content}")
                     }
+                    appendLine("别拿旧事当开场借口，别把话题清单化。这些只是背景。")
                 }
             }
 
