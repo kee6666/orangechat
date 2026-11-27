@@ -176,6 +176,16 @@ private fun AssistantLocalToolContent(
                 }
             )
             item(
+                headlineContent = { Text("生图") },
+                supportingContent = { Text("允许 AI 在聊天里直接出图。用你配好的生图渠道，App 本机直连，图会直接出现在对话里") },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.localTools.contains(LocalToolOption.ImageGen),
+                        onCheckedChange = { toggleLocalTool(LocalToolOption.ImageGen, it) }
+                    )
+                }
+            )
+            item(
                 headlineContent = { Text("日历读写") },
                 supportingContent = { Text("允许AI读取、创建和删除日历事件，需要日历权限") },
                 trailingContent = {

@@ -124,6 +124,14 @@ sealed class LocalToolOption {
     @Serializable
     @SerialName("ssh")
     data object Ssh : LocalToolOption()
+
+    /**
+     * 生图. 开启后注册 generate_image 工具, AI 用阿年配的生图渠道直接出图,
+     * 图作为附件发在聊天里, App 本机直连不经过服务器.
+     */
+    @Serializable
+    @SerialName("image_gen")
+    data object ImageGen : LocalToolOption()
 }
  
 class LocalTools(
@@ -636,6 +644,9 @@ class LocalTools(
             tools.add(me.rerere.rikkahub.data.ai.tools.local.sshUploadTool(context, sshHostRepository))
             tools.add(me.rerere.rikkahub.data.ai.tools.local.sshDownloadTool(context, sshHostRepository))
             tools.add(me.rerere.rikkahub.data.ai.tools.local.forgetSshHostKeyTool(context))
+        }
+        if (options.contains(LocalToolOption.ImageGen)) {
+            tools.add(createImageGenTool(context))
         }
         return tools
     }
