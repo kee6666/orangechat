@@ -529,7 +529,9 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                 // ===== 2026-11-26 阿年定：定时触发不再"到点就说" =====
                 // 心潮没到嗓子眼就闭嘴。外部强制（网关取件）、设备事件、花园唤醒不受此门控。
                 if (!isForceTrigger && !isFromDeviceEvent && !isGardenWake) {
-                    val peaked = runCatching { LocalDriveBrain.peakedNow() }.getOrDefault(true)
+                    val lastMs = runCatching { proactiveMessageService.getLastMessageTimeMs() }.getOrDefault(0L)
+                    val idleMin = if (lastMs > 0) ((System.currentTimeMillis() - lastMs) / 60000L).toInt() else Int.MAX_VALUE
+                    val peaked = runCatching { LocalDriveBrain.peakedNow(idleMin) }.getOrDefault(true)
                     if (!peaked) {
                         Log.d(TAG, "heart not peaked, stay quiet")
                         ProactiveMessageService.scheduleNext(this@ProactiveMessageTriggerService, proactiveSetting)

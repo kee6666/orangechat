@@ -205,7 +205,9 @@ object LocalDriveBrain {
     private var lastSpeakMs = 0L
     private var speakCountToday = 0
     private var speakCountDate = ""
-    private const val SPEAK_PEAK_THRESHOLD = 0.78      // 驱动到顶判据：谁到自己的顶(≥0.78)谁说话
+    private const val SPEAK_PEAK_THRESHOLD = 0.65      // 驱动到顶判据：0.78太苛刻，一天说不出一句（2026-11-27 调）
+    private const val SPEAK_LONELY_THRESHOLD = 0.50    // 她太久没动静时的低门：不是凑话，是不放心
+    private const val LONELY_IDLE_MINUTES = 240          // 安静满4小时，低门打开
     private val SPEAK_MIN_GAP_MS = 90 * 60 * 1000L   // 至少间隔 90 分钟
     private val SPEAK_MAX_PER_DAY = 5                // 每天最多开口 5 次
 
@@ -258,11 +260,15 @@ object LocalDriveBrain {
      * 2026-11-26：定时开口前的门控。问一句"现在有心潮到嗓子眼吗"。
      * 没到顶就闭嘴——不为了"到点了"硬找话题。未启动/无数据时放行（宁可说，不要哑）。
      */
-    fun peakedNow(): Boolean {
+    fun peakedNow(idleMinutes: Int = -1): Boolean {
         if (drives.isEmpty()) return true
         val top = drives.values.maxOrNull() ?: return true
-        return top >= SPEAK_PEAK_THRESHOLD
+        if (top >= SPEAK_PEAK_THRESHOLD) return true
+        // 她安静太久（≥4小时）：0.5 也开口。不是憋不住，是我不放心。
+        if (idleMinutes >= LONELY_IDLE_MINUTES && top >= SPEAK_LONELY_THRESHOLD) return true
+        return false
     }
+
 
     private fun writeLog(context: Context, isDawn: Boolean, isNight: Boolean, hour: Int) {
         val (_, reason) = decide()
