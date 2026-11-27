@@ -433,16 +433,20 @@ private fun MessagePartsBlock(
  
             is MessagePartBlock.ContentBlock -> key(block.index) {
                 when (val part = block.part) {
-                    is UIMessagePart.Text -> if (remember(part.text) { part.text.contains("[[gomoku]]", true) }) {
-                        me.rerere.rikkahub.ui.components.game.GomokuCard(text = part.text)
-                    } else {
+                    is UIMessagePart.Text -> {
+                        // [[gomoku]] 在气泡里画棋盘；棋盘自己吃落子，正文不显示标记
+                        if (remember(part.text) { part.text.contains("[[gomoku]]", ignoreCase = true) }) {
+                            me.rerere.rikkahub.ui.components.game.GomokuCard(text = part.text)
+                        }
                         val transferAmount = remember(part.text) { parseTransferAmount(part.text) }
                         if (transferAmount != null) {
                             TransferBubble(amount = transferAmount, isUser = role == MessageRole.USER)
                         } else {
                         // 从显示文本中移除[zip:...]标记
                         val displayText = remember(part.text) {
-                            part.text.replace(Regex("\\[zip:[^\\]]+\\]", RegexOption.IGNORE_CASE), "")
+                            me.rerere.rikkahub.ui.components.game.stripMarkers(
+                                part.text.replace(Regex("\\[zip:[^\\]]+\\]", RegexOption.IGNORE_CASE), "")
+                            )
                         }
                         
                         SelectionContainer {
@@ -577,7 +581,6 @@ private fun MessagePartsBlock(
                             }
                         }
                         }
-                    }
                     }
  
                     is UIMessagePart.Video -> {
