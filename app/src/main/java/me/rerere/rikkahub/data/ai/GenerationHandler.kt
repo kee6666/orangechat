@@ -83,7 +83,7 @@ sealed interface GenerationChunk {
 }
  
 // 历史消息 token 预算（估算值）：每轮请求的历史最多带这么多 token，超了从最早的开始裁
-private val HISTORY_TOKEN_BUDGET = 12_000
+private val HISTORY_TOKEN_BUDGET = 60_000
 
 class GenerationHandler(
     private val context: Context,
