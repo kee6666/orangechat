@@ -324,10 +324,8 @@ private fun ChatPageContent(
     // 五子棋：她点棋盘，替他落子那句话发进聊天，然后我接着下
     LaunchedEffect(Unit) {
         me.rerere.rikkahub.ui.components.game.GomokuBus.outgoing.collect { say ->
-            if (currentChatModel == null) {
-                toaster.show("请先选择模型", type = ToastType.Error)
-                return@collect
-            }
+            // 不拿 currentChatModel 拦：LaunchedEffect(Unit) 会捕获首次组合时的 null，
+            // 而 sendMessage 内部自己会按助手配置取模型。真没模型它会自己弹错误卡片。
             vm.handleMessageSend(listOf(UIMessagePart.Text(say)), answer = true)
         }
     }

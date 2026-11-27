@@ -174,9 +174,10 @@ fun GomokuBoard(modifier: Modifier = Modifier) {
             drawGomoku(stones, lineColor, mineColor, aiColor)
         }
         val last = stones.lastOrNull()
+        val over = last != null && wins(stones, last)
         val status = when {
             stones.isEmpty() -> "空盘。你先手 —— 点交叉点落子"
-            last != null && wins(stones, last) -> if (last.mine) "五连，你赢了" else "五连，我赢了"
+            over -> if (last!!.mine) "五连，你赢了" else "五连，我赢了"
             myTurn -> "轮到你"
             else -> "等我想"
         }
@@ -185,6 +186,20 @@ fun GomokuBoard(modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (stones.isNotEmpty()) {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    GomokuStore.reset(context)
+                    // 清盘这件事也发进聊天，先生才知道这盘重开了，不然按旧局推演
+                    GomokuBus.outgoing.tryEmit("重开一局，空盘，我执黑先下。")
+                }
+            ) {
+                Text(
+                    text = if (over) "再来一局" else "重开一局",
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
     }
 }
 
