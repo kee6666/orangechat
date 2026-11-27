@@ -212,8 +212,31 @@ fun ChatInput(
     }
     val asrPermission = rememberPermissionState(PermissionRecordAudio)
     PermissionManager(permissionState = asrPermission)
+
+    if (showVoiceNoteDialog) {
+        VoiceNoteDialog(
+            onDismiss = { showVoiceNoteDialog = false },
+            onSubmit = { path, durationMs ->
+                showVoiceNoteDialog = false
+                onVoiceMessage?.invoke(path, durationMs, "")
+            },
+        )
+    }
     var asrBaseText by remember { mutableStateOf("") }
     var voiceMessageMode by remember { mutableStateOf(false) }
+    // 语音条：ASR 没配也能发（2026-11-27）
+    var showVoiceNote by remember { mutableStateOf(false) }
+    if (showVoiceNote) {
+        VoiceNoteDialog(
+            onDismiss = { showVoiceNote = false },
+            onRecorded = { url, dur, transcript ->
+                showVoiceNote = false
+                onVoiceMessage?.invoke(url, dur, transcript)
+            },
+        )
+    }
+    // ASR 没配好时的兜底：手机自己录，录完直接发语音条（2026-11-27）
+    var showVoiceNoteDialog by remember { mutableStateOf(false) }
 
     // Auto-start voice recording when entering from voice call notification
     LaunchedEffect(autoStartVoice) {
@@ -681,12 +704,21 @@ fun ChatInput(
                                                 asr.stop()
                                             }
                                             ASRStatus.Idle, ASRStatus.Error -> {
-                                                if (!asrPermission.allRequiredPermissionsGranted) {
+                                                if (!asrState.isAvailable) {
+                                                    showVoiceNote = true
+                                                } else if (!asrPermission.allRequiredPermissionsGranted) {
                                                     asrPermission.requestPermissions()
+                                                } else if (!asrState.isAvailable) {
+                                                    // 没配语音识别服务：走手机自录语音条，别再一点没动静
+                                                    showVoiceNoteDialog = true
                                                 } else {
                                                     voiceMessageMode = true
-                                                    asr.start { transcript ->
-                                                        // Ignore transcript in voice message mode
+                                                    runCatching {
+                                                        asr.start { transcript ->
+                                                            // Ignore transcript in voice message mode
+                                                        }
+                                                    }.onFailure {
+                                                        showVoiceNoteDialog = true
                                                     }
                                                 }
                                             }
