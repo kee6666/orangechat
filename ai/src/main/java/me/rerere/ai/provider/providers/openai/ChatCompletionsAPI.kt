@@ -113,6 +113,20 @@ class ChatCompletionsAPI(
         // 检测响应是否为 SSE 格式（某些 API 即使 stream=false 也返回 SSE）
         val isSSE = bodyStr.trimStart().startsWith("data:")
 
+        // 网关/CDN/反代常以 200 返回 HTML 错误页。此时硬解析 JSON 只会抛出
+        // "Unexpected JSON token at offset 11 ..." 这种看不懂的错，还把整页 HTML
+        // 塞进异常消息。提前拦下，给出状态码 + 片段，让人一眼知道请求打到哪去了。
+        if (!isSSE) {
+            val trimmed = bodyStr.trimStart()
+            if (trimmed.isEmpty() || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) {
+                val preview = bodyStr.take(300).replace("\n", " ").replace("\r", "")
+                throw Exception(
+                    "服务端返回了非 JSON 内容（HTTP ${response.code}，共 ${bodyStr.length} 字），" +
+                        "多半是网关/反代错误页，或 baseUrl 指错了。前 300 字：$preview"
+                )
+            }
+        }
+
         if (isSSE) {
             // 解析 SSE 流，合并所有 delta 为完整消息。
             // 这里拿到的是整个响应体,需要按 SSE 协议处理:事件之间用空行分隔,事件内
