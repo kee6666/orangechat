@@ -16,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -111,6 +113,27 @@ fun stripMarkers(text: String): String = text
     .replace(Regex("""\[\[gomoku\]\]""", RegexOption.IGNORE_CASE), "")
     .replace(Regex("""\[\[move:\s*[a-oA-O]\d{1,2}\s*\]\]""", RegexOption.IGNORE_CASE), "")
     .trim()
+
+private fun wins(list: List<Stone>, last: Stone): Boolean {
+    val dirs = listOf(1 to 0, 0 to 1, 1 to 1, 1 to -1)
+    for ((dx, dy) in dirs) {
+        var n = 1
+        var i = 1
+        while (true) {
+            val s = list.firstOrNull { it.x == last.x + dx * i && it.y == last.y + dy * i && it.mine == last.mine }
+            if (s == null) break
+            n++; i++
+        }
+        i = 1
+        while (true) {
+            val s = list.firstOrNull { it.x == last.x - dx * i && it.y == last.y - dy * i && it.mine == last.mine }
+            if (s == null) break
+            n++; i++
+        }
+        if (n >= 5) return true
+    }
+    return false
+}
 
 @Composable
 fun GomokuBoard(modifier: Modifier = Modifier) {
