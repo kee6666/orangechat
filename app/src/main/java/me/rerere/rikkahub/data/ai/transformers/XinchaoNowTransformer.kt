@@ -19,8 +19,12 @@ import java.net.URL
 /**
  * 心潮·此刻 注入器（2026-11-27）
  *
- * 每轮生成前向 VPS 拉一次 /v1/now（只读代理，短超时），把"此刻"追加到 system。
+ * 每轮生成前向 VPS 拉一次 /v1/now（只读代理，短超时），把"此刻"追加到最新一条 user 消息。
  * 铁律：拿不到就不注入——这条改动永远不许影响聊天本身。
+ *
+ * 缓存友好（2026-11-27 改）：此刻每 90 秒就变。以前追加在 system 末尾，system 一变
+ * 就把后面整段历史的前缀缓存全打掉了。现在挂到最后一条 user 消息上——system 和落库的
+ * 历史保持恒定，只有这条最新消息需要重算，前面一大截都能命中上游缓存。
  */
 object XinchaoNowTransformer : InputMessageTransformer {
     private const val TAG = "XinchaoNow"
@@ -46,6 +50,14 @@ object XinchaoNowTransformer : InputMessageTransformer {
             append("</xinchao-now>")
         }
 
+        // 优先挂到最后一条 user 消息：绝不动 system，保住前缀缓存
+        val lastUserIndex = messages.indexOfLast { it.role == MessageRole.USER }
+        if (lastUserIndex >= 0) {
+            return messages.toMutableList().apply {
+                this[lastUserIndex] = this[lastUserIndex].appendText(block)
+            }
+        }
+        // 兜底：没有 user 消息时才退回 system（极少发生）
         val systemIndex = messages.indexOfFirst { it.role == MessageRole.SYSTEM }
         return if (systemIndex >= 0) {
             messages.toMutableList().apply {
