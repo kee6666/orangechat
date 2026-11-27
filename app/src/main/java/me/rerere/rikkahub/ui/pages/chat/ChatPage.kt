@@ -321,6 +321,17 @@ private fun ChatPageContent(
 
     TTSAutoPlay(vm = vm, setting = setting, conversation = conversation)
 
+    // 五子棋：她点棋盘，替他落子那句话发进聊天，然后我接着下
+    LaunchedEffect(Unit) {
+        me.rerere.rikkahub.ui.components.game.GomokuBus.outgoing.collect { say ->
+            if (currentChatModel == null) {
+                toaster.show("请先选择模型", type = ToastType.Error)
+                return@collect
+            }
+            vm.handleMessageSend(listOf(UIMessagePart.Text(say)), answer = true)
+        }
+    }
+
     Surface(
         color = MaterialTheme.colorScheme.background,
         modifier = Modifier.fillMaxSize()

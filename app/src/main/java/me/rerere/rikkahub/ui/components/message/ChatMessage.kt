@@ -433,7 +433,9 @@ private fun MessagePartsBlock(
  
             is MessagePartBlock.ContentBlock -> key(block.index) {
                 when (val part = block.part) {
-                    is UIMessagePart.Text -> {
+                    is UIMessagePart.Text -> if (remember(part.text) { part.text.contains("[[gomoku]]", true) }) {
+                        me.rerere.rikkahub.ui.components.game.GomokuCard(text = part.text)
+                    } else {
                         val transferAmount = remember(part.text) { parseTransferAmount(part.text) }
                         if (transferAmount != null) {
                             TransferBubble(amount = transferAmount, isUser = role == MessageRole.USER)
@@ -575,6 +577,7 @@ private fun MessagePartsBlock(
                             }
                         }
                         }
+                    }
                     }
  
                     is UIMessagePart.Video -> {
