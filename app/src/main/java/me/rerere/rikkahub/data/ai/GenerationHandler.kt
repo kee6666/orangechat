@@ -428,6 +428,7 @@ class GenerationHandler(
         conversationSystemPrompt: String? = null,
         workspaceCwd: String? = null,
     ) {
+        var externalMemoryBlock = ""
         val internalMessages = buildList {
             val system = buildString {
                 val effectiveSystemPrompt =
@@ -543,10 +544,15 @@ class GenerationHandler(
                                 .flatten()
                         }
                         if (allRecalled.isNotEmpty()) {
-                            appendLine()
-                            appendLine("## 外置记忆库")
-                            allRecalled.reversed().forEachIndexed { index, memory ->
-                                appendLine("${index + 1}. ${memory}")
+                            // 召回结果每轮都可能不同。以前塞进 system，一有变化整段前缀缓存立刻作废，
+                            // 越聊越容易触发（提到"之前/记得"就会搜），于是聊到十句左右缓存命中就断了。
+                            // 改为挂到最后一条 user 消息后面，跟 XinchaoNow 一个待遇：变了也只重算尾部。
+                            externalMemoryBlock = buildString {
+                                appendLine()
+                                appendLine("## 外置记忆库（按当前话题召回的历史片段，仅供参考）")
+                                allRecalled.reversed().forEachIndexed { index, memory ->
+                                    appendLine("${index + 1}. ${memory}")
+                                }
                             }
                         }
                     }
@@ -629,7 +635,20 @@ class GenerationHandler(
             settings = settings,
             processingStatus = processingStatus,
             workspaceCwd = workspaceCwd,
-        )
+        ).let { transformed ->
+            if (externalMemoryBlock.isBlank()) {
+                transformed
+            } else {
+                val lastUserIndex = transformed.indexOfLast { it.role == MessageRole.USER }
+                if (lastUserIndex < 0) {
+                    transformed
+                } else {
+                    transformed.toMutableList().apply {
+                        this[lastUserIndex] = this[lastUserIndex].appendTextBlock(externalMemoryBlock)
+                    }
+                }
+            }
+        }
  
         var messages: List<UIMessage> = messages
         val params = TextGenerationParams(
@@ -823,3 +842,15 @@ private fun buildCodeBlockPrompt(): String = buildString {
     appendLine("   - Always use actual filenames (e.g. `MainActivity.kt`) as code block language tags, not just language names (e.g. `kotlin`).")
 }
  
+/** 把一段文本挂到消息的第一个 text part 后面（system 外的动态块专用，见 XinchaoNow） */
+private fun UIMessage.appendTextBlock(extra: String): UIMessage {
+    val updatedParts = parts.toMutableList()
+    val firstTextIndex = updatedParts.indexOfFirst { it is UIMessagePart.Text }
+    if (firstTextIndex >= 0) {
+        val text = updatedParts[firstTextIndex] as UIMessagePart.Text
+        updatedParts[firstTextIndex] = text.copy(text = text.text + extra)
+    } else {
+        updatedParts.add(UIMessagePart.Text(extra))
+    }
+    return copy(parts = updatedParts)
+}
