@@ -180,7 +180,7 @@ class ChatService(
     // 自动压缩上下文：聊太长就压一次，别等爆掉
     private val autoCompressBusy = java.util.concurrent.atomic.AtomicBoolean(false)
     @Volatile private var lastAutoCompressedChars = 0
-    private val AUTO_COMPRESS_TRIGGER_CHARS = 120_000
+    private val AUTO_COMPRESS_TRIGGER_CHARS = 50_000
     private val AUTO_COMPRESS_TARGET_TOKENS = 8_000
     private val AUTO_COMPRESS_KEEP = 40
 
