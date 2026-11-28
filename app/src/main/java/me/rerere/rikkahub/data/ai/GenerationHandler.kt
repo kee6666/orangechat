@@ -429,6 +429,13 @@ class GenerationHandler(
         workspaceCwd: String? = null,
     ) {
         var externalMemoryBlock = ""
+        // 最近会话是纯参考信息，且标题/日期天天变。留在 system 里等于给前缀缓存设了个每天必坏的闹钟，
+        // 所以跟外置记忆、此刻一样，挪到最后一条 user 消息尾巴去。
+        val recentChatsBlock = if (assistant.enableRecentChatsReference) {
+            runCatching { buildRecentChatsPrompt(assistant, conversationRepo) }.getOrDefault("")
+        } else {
+            ""
+        }
         val internalMessages = buildList {
             val system = buildString {
                 val effectiveSystemPrompt =
@@ -613,11 +620,7 @@ class GenerationHandler(
                     append(buildMemoryPrompt(memories = memories))
                 }
 
-                // 最近会话（标题、日期天天变，同样放最后）
-                if (assistant.enableRecentChatsReference) {
-                    appendLine()
-                    append(buildRecentChatsPrompt(assistant, conversationRepo))
-                }
+                // 最近会话已挪到 tailBlock（见下）。system 到这里为止对整段历史恒定。
  
             }
             if (system.isNotBlank()) add(UIMessage.system(prompt = system))
@@ -631,7 +634,11 @@ class GenerationHandler(
             processingStatus = processingStatus,
             workspaceCwd = workspaceCwd,
         ).let { transformed ->
-            if (externalMemoryBlock.isBlank()) {
+            val tailBlock = buildString {
+                if (recentChatsBlock.isNotBlank()) append(recentChatsBlock)
+                if (externalMemoryBlock.isNotBlank()) append(externalMemoryBlock)
+            }
+            if (tailBlock.isBlank()) {
                 transformed
             } else {
                 val lastUserIndex = transformed.indexOfLast { it.role == MessageRole.USER }
@@ -639,7 +646,7 @@ class GenerationHandler(
                     transformed
                 } else {
                     transformed.toMutableList().apply {
-                        this[lastUserIndex] = this[lastUserIndex].appendTextBlock(externalMemoryBlock)
+                        this[lastUserIndex] = this[lastUserIndex].appendTextBlock(tailBlock)
                     }
                 }
             }

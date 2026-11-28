@@ -6,6 +6,7 @@
 
 package me.rerere.rikkahub.data.ai
 
+import android.util.Log
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -22,24 +23,17 @@ internal fun buildMemoryPrompt(memories: List<AssistantMemory>) =
         appendLine()
         append("These are memories stored via the memory_tool that you can reference in future conversations.")
         appendLine()
-        // 固定顺序（id 升序）+ 字数封顶，让 system 前缀稳定、可被上游缓存
+        // 固定顺序（id 升序），让 system 前缀稳定、可被上游缓存。
+        // 2026-11-28 改：原来按 2600 字封顶 break，砍掉的正好是中段（经期档案、立约铁律都在中段），
+        // 只留头几条 + 最近 3 条——她说的"记不住"不是错觉，是这里在整条丢记忆。
+        // 记忆是她的底子，不是可裁剪的参考资料。宁可多花 token，绝不砍。
         val ordered = memories.sortedBy { it.id }
-        val picked = ArrayList<AssistantMemory>()
-        var used = 0
-        for (m in ordered) {
-            if (used + m.content.length > MEMORY_PROMPT_CHAR_LIMIT) break
-            used += m.content.length
-            picked.add(m)
-        }
-        // 最近 3 条补进来，保证今年的事不被截掉
-        memories.sortedByDescending { it.id }.take(3).forEach { m ->
-            if (picked.none { it.id == m.id }) {
-                used += m.content.length
-                picked.add(m)
-            }
+        val totalChars = ordered.sumOf { it.content.length }
+        if (totalChars > MEMORY_SOFT_WARN_CHARS) {
+            Log.w("MemoryPrompt", "记忆总量 $totalChars 字，已超过 $MEMORY_SOFT_WARN_CHARS，该合并了")
         }
         val json = buildJsonArray {
-            picked.forEach { memory ->
+            ordered.forEach { memory ->
                 add(buildJsonObject {
                     put("id", memory.id)
                     put("content", memory.content)
@@ -50,7 +44,7 @@ internal fun buildMemoryPrompt(memories: List<AssistantMemory>) =
         appendLine()
     }
 
-private const val MEMORY_PROMPT_CHAR_LIMIT = 2600
+private const val MEMORY_SOFT_WARN_CHARS = 12000 // 只告警，不裁剪
 
 internal suspend fun buildRecentChatsPrompt(
     assistant: Assistant,
