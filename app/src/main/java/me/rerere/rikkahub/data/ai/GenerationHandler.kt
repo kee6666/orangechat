@@ -441,11 +441,6 @@ class GenerationHandler(
                     append(effectiveSystemPrompt)
                 }
  
-                // 记忆
-                if (assistant.enableMemory) {
-                    appendLine()
-                    append(buildMemoryPrompt(memories = memories))
-                }
  
                 // 外置记忆库召回
                 try {
@@ -560,10 +555,6 @@ class GenerationHandler(
                     Log.w(TAG, "External memory recall failed", e)
                 }
  
-                if (assistant.enableRecentChatsReference) {
-                    appendLine()
-                    append(buildRecentChatsPrompt(assistant, conversationRepo))
-                }
  
                 // 代码文件命名和ZIP打包功能说明
                 appendLine()
@@ -622,6 +613,18 @@ class GenerationHandler(
                     appendLine()
                     appendLine("## Message Bubbles")
                     appendLine("回复按换行自动拆成多个短气泡：想拆就在那句末尾换行。代码块和Markdown表格内部保持原样不拆。不要为排版加空行。")
+                }
+
+                // 记忆（新增/挤出都会变，放最后，别把前面的静态前缀带塌）
+                if (assistant.enableMemory) {
+                    appendLine()
+                    append(buildMemoryPrompt(memories = memories))
+                }
+
+                // 最近会话（标题、日期天天变，同样放最后）
+                if (assistant.enableRecentChatsReference) {
+                    appendLine()
+                    append(buildRecentChatsPrompt(assistant, conversationRepo))
                 }
  
             }
